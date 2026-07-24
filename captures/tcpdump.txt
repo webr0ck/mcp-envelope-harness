@@ -1,0 +1,1 @@
+tcpdump: skipped (sudo -n unavailable) — app-level captures/mitm.jsonl is the primary artifact
