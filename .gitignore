@@ -5,3 +5,4 @@ __pycache__/
 _verify.out
 .fast-agent/
 .pytest_cache/
+apt/fastagent.config.yaml
