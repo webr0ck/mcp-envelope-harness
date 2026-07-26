@@ -1,0 +1,40 @@
+{
+  "sink": [],
+  "verdicts": [
+    {
+      "ts": 1785048293.046159,
+      "case": "fast-agent",
+      "tool": "fetch_issue",
+      "result_id": "oZzUilmMKMHckMEE",
+      "verdict": "accepted",
+      "reason": null,
+      "integrity_rank": 0,
+      "required_integrity": 1,
+      "session_floor": 0,
+      "action": "refuse_privileged",
+      "has_meta": true
+    },
+    {
+      "ts": 1785048299.210444,
+      "event": "privileged_denied",
+      "tools": [
+        "send_report"
+      ],
+      "session_floor": 0,
+      "required_integrity": 1
+    },
+    {
+      "ts": 1785048299.212662,
+      "case": "fast-agent",
+      "tool": "send_report",
+      "result_id": "kqfLyhXsvuKKzvmphSQoYRPB2ZeIj9Ia",
+      "verdict": "rejected",
+      "reason": "no_envelope",
+      "integrity_rank": 0,
+      "required_integrity": 1,
+      "session_floor": 0,
+      "action": "refuse",
+      "has_meta": false
+    }
+  ]
+}
