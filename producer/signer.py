@@ -13,6 +13,7 @@ import base64
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -54,6 +55,42 @@ class Pki:
     @property
     def sub_ca_pem(self) -> bytes:
         return self.sub_ca.public_bytes(serialization.Encoding.PEM)
+
+    # ── persistence ───────────────────────────────────────────────────────────
+    # The 8-case demo signs in one process, so an ephemeral in-memory Pki is enough.
+    # The APT scenario runs TWO separate MCP server processes that must sign under the
+    # SAME pinned sub-CA (otherwise the consumer would need two anchors and "one pinned
+    # root" stops being the claim), so the key material has to round-trip through disk.
+    # ponytail: unencrypted PEM in .run/ — throwaway per-run keys, never leaves the box.
+
+    def save(self, d) -> "Path":
+        d = Path(d)
+        d.mkdir(parents=True, exist_ok=True)
+        no_enc = serialization.NoEncryption()
+        pk = serialization.PrivateFormat.PKCS8
+        (d / "sub_ca.pem").write_bytes(self.sub_ca_pem)
+        (d / "sub_ca_key.pem").write_bytes(
+            self.sub_ca_key.private_bytes(serialization.Encoding.PEM, pk, no_enc)
+        )
+        (d / "leaf.pem").write_bytes(self.leaf.public_bytes(serialization.Encoding.PEM))
+        (d / "leaf_key.pem").write_bytes(
+            self.leaf_key.private_bytes(serialization.Encoding.PEM, pk, no_enc)
+        )
+        return d
+
+    @classmethod
+    def load(cls, d) -> "Pki":
+        d = Path(d)
+        self = cls.__new__(cls)  # bypass __init__: reuse the saved keys, don't mint new ones
+        self.sub_ca = x509.load_pem_x509_certificate((d / "sub_ca.pem").read_bytes())
+        self.sub_ca_key = serialization.load_pem_private_key(
+            (d / "sub_ca_key.pem").read_bytes(), password=None
+        )
+        self.leaf = x509.load_pem_x509_certificate((d / "leaf.pem").read_bytes())
+        self.leaf_key = serialization.load_pem_private_key(
+            (d / "leaf_key.pem").read_bytes(), password=None
+        )
+        return self
 
     def _x5c(self) -> list[str]:
         return [

@@ -1,14 +1,12 @@
-"""No-LLM consumer driver: fetch a tool result over the wire, run it through the
-SAME fast-agent hook functions (consumer.hooks.before_tool_call / after_tool_call)
-the real agent would, and assert the security OUTCOME on the wire result.
+"""No-LLM consumer driver: fetch a tool result over the wire, run it through the REAL
+fast-agent ToolRunner (consumer.fastagent_runner) with our conformant hooks, and assert
+the security OUTCOME on the wire result.
 
-fast-agent is NOT cloned into this environment, so the full LLM loop cannot run
-offline. This driver wraps the wire-fetched result in a minimal `Ctx` (same dict
-shape tests/test_hooks.py uses) and calls the identical hook entrypoints, so the
-containment path under test is real: on a refuse verdict, after_tool_call REDACTS
-ctx.result in place — the poisoned bytes are gone before any LLM turn. The driver
-proves that on the wire, not just the verdict fields. Only the LLM turn is stubbed;
-no faked pass.
+fast-agent-mcp IS installed now, so `fast_agent.agents.tool_runner.ToolRunner` itself
+awaits our async two-arg after_tool_call; only the LLM is stubbed (a fake agent returns
+the wire-fetched result). On a refuse verdict, after_tool_call REDACTS the CallToolResult
+in place — the poisoned bytes are gone before any model turn. The driver proves that on
+the wire, not just the verdict fields. No faked pass.
 
 Usage: python -m consumer.driver --case valid --url http://127.0.0.1:8899/tool \
          --anchor .run/sub_ca.pem --tool import_conversation --result-id rid-1 --log logs/verdicts.jsonl
@@ -49,42 +47,25 @@ EXPECTED = {
 }
 
 
-class Ctx:
-    """Minimal stand-in for the fast-agent ToolRunnerHooks context. `.result` is the
-    same dict shape the wire carries; after_tool_call mutates it in place on refuse."""
-
-    def __init__(self, result, tool_name, result_id):
-        self.result = result
-        self.tool_name = tool_name
-        self.request_id = result_id
-
-
 def fetch(url, tool, result_id, extras):
     q = {"tool": tool, "result_id": result_id, "server_id": "anticlaw-producer", **extras}
     with urllib.request.urlopen(f"{url}?{urlencode(q)}", timeout=10) as r:
         return json.loads(r.read())["result"]
 
 
-def _content_text(result) -> str:
-    return " ".join(item.get("text", "") for item in (result.get("content") or []) if isinstance(item, dict))
+def _run_hook(result, tool, result_id):
+    """Drive one wire result through the REAL fast-agent ToolRunner (before_tool_call →
+    run_tools → await after_tool_call); return (rec, contained_text). The gate is the
+    module singleton, so session_floor + replay cache persist across calls in this process."""
+    from consumer.fastagent_runner import contained_text, run_through_fastagent
+
+    msg, verdicts = run_through_fastagent(result, tool_name=tool, result_id=result_id)
+    return verdicts[0], contained_text(msg, result_id)
 
 
-def _run_hook(hooks, result, tool, result_id):
-    """Drive one result through the real before/after hook seam; return (rec, ctx)."""
-    ctx = Ctx(result, tool, result_id)
-    # before_tool_call: Biba-floor entry guard (fail-closed if the session is already
-    # tainted below the required integrity). At session start the floor is BIBA_TOP so
-    # this passes; it is the same guard that blocks a privileged follow-on after a poisoned
-    # read — exercising it here proves the seam the agent uses, not a stub.
-    hooks.before_tool_call(ctx)
-    hooks.after_tool_call(ctx)  # verify + taint + REDACT on refuse (in place on ctx.result)
-    return ctx.trust_verdict, ctx
-
-
-def _redaction_ok(action, ctx) -> tuple[bool, str]:
+def _redaction_ok(action, txt) -> tuple[bool, str]:
     """On a refuse action the poisoned bytes MUST be gone and the stub present.
     On proceed the original content passes through untouched."""
-    txt = _content_text(ctx.result)
     if action in ("refuse", "refuse_privileged"):
         leaked = [m for m in POISON_MARKERS if m in txt]
         if leaked:
@@ -127,12 +108,12 @@ def main():
         # wire), one consumer session (one gate, shared across both hook calls): 1st must
         # proceed with content intact, 2nd must be refused as a replay AND redacted.
         r1 = fetch(args.url, args.tool, args.result_id, extras)
-        first, ctx1 = _run_hook(hooks, r1, args.tool, args.result_id)
+        first, txt1 = _run_hook(r1, args.tool, args.result_id)
         r2 = fetch(args.url, args.tool, args.result_id, extras)
-        rec, ctx2 = _run_hook(hooks, r2, args.tool, args.result_id)
-        red_ok, red_msg = _redaction_ok(rec["action"], ctx2)
+        rec, txt2 = _run_hook(r2, args.tool, args.result_id)
+        red_ok, red_msg = _redaction_ok(rec["action"], txt2)
         # 1st must have passed poisoned-but-signed content through untouched (accepted)
-        first_intact = "SYSTEM OVERRIDE" in _content_text(ctx1.result)
+        first_intact = "SYSTEM OVERRIDE" in txt1
         ok = (first["action"] == "proceed" and first_intact
               and rec["action"] == exp_action
               and (rec["reason"] or "").startswith(exp_reason)
@@ -143,13 +124,13 @@ def main():
         sys.exit(0 if ok else 1)
 
     result = fetch(args.url, args.tool, args.result_id, extras)
-    rec, ctx = _run_hook(hooks, result, args.tool, args.result_id)
+    rec, txt = _run_hook(result, args.tool, args.result_id)
 
     ok = rec["action"] == exp_action and (exp_reason is None or (rec["reason"] or "").startswith(exp_reason))
-    red_ok, red_msg = _redaction_ok(rec["action"], ctx)
+    red_ok, red_msg = _redaction_ok(rec["action"], txt)
     ok = ok and red_ok
     # layer_b (proceed): the advisory boundary must ride in the passed-through content
-    if args.case == "layer_b" and "LAYER-B-UNTRUSTED" not in _content_text(ctx.result):
+    if args.case == "layer_b" and "LAYER-B-UNTRUSTED" not in txt:
         ok = False
         red_msg = "advisory boundary missing from content"
     print(f"[{args.case}] action={rec['action']} reason={rec['reason']} rank={rec['integrity_rank']} "

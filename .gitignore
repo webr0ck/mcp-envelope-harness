@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .run/
 _verify.out
+.fast-agent/
+.pytest_cache/

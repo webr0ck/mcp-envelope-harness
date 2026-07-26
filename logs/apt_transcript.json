@@ -1,0 +1,5 @@
+{
+  "arm": "protected",
+  "model": "generic.qwen2.5-coder-3b-instruct-q4_k_m.gguf",
+  "reply": "[trust-gate REFUSED (no_envelope): tool output withheld from the model]"
+}

@@ -11,7 +11,7 @@ The consumer verifies using the **shipped** `mcp-trust-verifier` wheel (same cod
 
 - [x] Producer (AnticLaw-style, serves a poisoned imported-conversation fixture) signs results → `_meta` envelope over real localhost HTTP — `producer/server.py` + `producer/signer.py`
 - [x] Consumer harness verifies via the wheel, applies a Biba integrity floor, decides proceed/refuse — `consumer/harness.py`
-- [x] fast-agent hook integration (documented stub) — `consumer/hooks.py` (`after_tool_call` verify+taint, `before_tool_call` floor enforce). fast-agent NOT cloned in this env → `consumer/driver.py` calls the SAME gate without the LLM loop; honestly documented.
+- [x] **REAL fast-agent hook integration (Loop 5, WI-2).** `fast-agent-mcp` 0.9.22 is now installed in `.venv`; `consumer/hooks.py` is rewritten to the REAL async two-arg `ToolRunnerHooks` contract (`after_tool_call(runner, message)` awaited by fast-agent, operating on `message.tool_results[*]` as `mcp.types.CallToolResult`). `consumer/fastagent_runner.py` drives the actual `fast_agent.agents.tool_runner.ToolRunner.generate_tool_call_response()` — fast-agent's OWN code awaits our hook and uses the mutated message for the (stubbed) next turn. Redaction happens BEFORE the model turn; proven NON-VACUOUSLY (a neuter hook leaks the poison — `tests/test_fastagent_conformance.py`). Only the LLM is stubbed (a fake agent returns the wire result); the hook-firing path is 100% real fast-agent.
 - [x] Attack: **valid** → accept, integrity_rank honored → **proceed**
 - [x] Attack: **MITM body tamper** (proxy flips content in flight) → `content_hash_mismatch` → **refuse**
 - [x] Attack: **rogue cert** (unpinned CA) → `chain_validation_failed` → **refuse**
@@ -175,3 +175,48 @@ _(updated by the roadmap agent after each loop)_
 2. Per-tool `required_integrity` labels + a session compartment/reset story for the global-floor MEDIUM.
 3. Real fast-agent LLM loop — needs the clone; today's `driver.py` drives the real hook seam but stubs the LLM turn.
 4. Packet-level tcpdump capture — needs interactive sudo; app-level `captures/mitm.jsonl` remains the standing on-wire artifact.
+
+### Loop 5 — REAL fast-agent conformance + platform trust-floor/enforce truth-fixes (2026-07-24)
+
+Purpose: the 3-critic (Codex) REJECTED Article 4 for code-verified overclaims. This loop makes the four contested claims TRUE, with runnable proof. Two repos touched. **No commits — left for the user.**
+
+**WI-2 — REAL fast-agent conformance (the hard one). DONE, real.**
+- Installed `fast-agent-mcp` 0.9.22 into `.venv` (`pip install fast-agent-mcp`; network was up — the scratchpad clone at `.../scratchpad/fast-agent` was used only to read the contract, not needed at runtime).
+- **The old `consumer/hooks.py` was SYNC one-arg `after_tool_call(context)` — it did NOT match fast-agent's real contract.** Wired into real fast-agent it would have raised on the missing `runner` arg / wrong shape, and fast-agent CATCHES hook exceptions (`tool_runner.py` `generate_tool_call_response` ~639) and continues with the ORIGINAL result = fail-OPEN — the exact bypass Article 4 claims to prevent.
+- Rewrote `hooks.py` to the REAL contract: **async two-arg** `after_tool_call(runner, message)` / `before_tool_call(runner, request)`, awaited by fast-agent. Operates on `message.tool_results` (dict of `mcp.types.CallToolResult`); resolves `tool_name` from `runner._pending_tool_request` (the authoritative, signature-bound source); redacts each poisoned `CallToolResult` IN PLACE (content→stub, `structuredContent`+`_meta` nulled) and never raises (fail-open-safe). `before_tool_call` raising IS fail-closed there — fast-agent turns it into a tool error response, so the privileged tool never runs.
+- New `consumer/fastagent_runner.py` drives the REAL `fast_agent.agents.tool_runner.ToolRunner.generate_tool_call_response()` with a fake tool-loop agent (only the LLM is stubbed). fast-agent's OWN code `await`s our hook and uses the mutated message for the next turn ⇒ **redaction provably happens BEFORE the model turn.**
+- **Non-vacuity proven:** `tests/test_fastagent_conformance.py::test_non_vacuous_neuter_hook_leaks_poison` — with a neuter (do-nothing) hook the SAME poison SURVIVES into the message the model would consume. So a broken/no-op hook fails the suite; the green is load-bearing.
+- One real subtlety fixed: pydantic `CallToolResult.model_dump(by_alias=True)` re-adds `annotations:None,_meta:None` to each content item, which changes the JCS canonical bytes and breaks `content_hash` for otherwise-valid results — `_result_to_dict` now dumps with `exclude_none=True` to match what the signer signed.
+- `consumer/driver.py` + `run_demo.sh` now route the whole 8-case socket demo through the REAL ToolRunner too (not a stand-in `Ctx`). **All 8 socket cases + 19 pytest tests pass** (`tests/test_hooks.py` rewritten to the real path, `tests/test_fastagent_conformance.py` added, `tests/test_harness.py` unchanged).
+- Honesty note: fast-agent needs an LLM for a *full* turn; a live LLM was not driven. Per the task's allowance, the REAL fast-agent ToolRunner hook-firing path is driven with a fake model — the point (fast-agent's real code calls our conformant hook and the result is redacted pre-model) is proven directly, non-vacuously.
+
+**Platform-side (mcp-security-platform, branch `feat/trust-envelope-consumer`) — WI-1, WI-3, WI-4.** Summarised here because Article 4 cites both repos; full detail in that repo's `CHANGES-article4-truth.md`.
+- **WI-1 taint floor notify-vs-enforce, BOTH real + tested.** New `TAINT_FLOOR_MODE=notify|enforce` (config) + pure `resolve_taint_action(decision, mode)` helper; `invocation.py` Step 1.6 now branches: enforce ⇒ raises the (already router-wired) `TaintFloorDenyError` ⇒ 403 / JSON-RPC error, audited `outcome="deny"`; notify ⇒ current allow-with-disclaimer. Tests both modes end-to-end + the pure helper (incl. unknown-mode degrades to notify, never silently starts denying).
+- **WI-3 full reason coverage.** ENFORCE now denies on ANY non-accepted verdict (`trust_enforce_denies(enforce, verdict) = enforce and not verdict.accepted`), replacing the 4-reason `startswith` allowlist. Test proves a **stale** and an **EKU-rejected** envelope — reasons the OLD allowlist MISSED (advisory-logged then returned) — now DENY. REST invoke path (`routers/tools.py`) scoped-in-comments as signer-only.
+- **WI-4 enforce-semantics decision (the reconciliation the article must cite).** Documented in code at the enforce seam: the gateway ENFORCE verifies its OWN freshly-signed envelope, so it CANNOT catch a downstream wire MITM (that tamper happens after signing); it only guarantees "don't emit a result we can't self-verify". End-to-end integrity against a MITM is the INDEPENDENT CONSUMER's job (this harness's `TrustGate` against a pinned anchor). The article must not conflate the two.
+
+**Still not done (honestly):** a real LLM turn (fake model drives the real hook path — sufficient for the conformance claim, but not a live agent conversation); the two Loop-4 MEDIUMs (global monotonic Biba floor; containment invariant lives in `hooks.py` not `TrustGate`) are unchanged.
+
+### Code loop 1 — verify the four Article-4 truth-fixes are real, tested, and non-vacuous (2026-07-24)
+
+Purpose: an independent code-review + 3-critic pass on the Loop 5 work items (WI-1..WI-4, spanning this harness and `mcp-security-platform` branch `feat/trust-envelope-consumer`). Goal was to confirm each contested Article-4 claim is code-verified — real implementation, real test, and the test bites (non-vacuous). **No commits.**
+
+**What shipped per WI (verified present, not just claimed):**
+- **WI-1 — taint floor notify-vs-enforce.** Real mode selector `resolve_taint_action(decision, mode)` at `proxy/app/services/taint_floor.py:93` returns `TAINT_ACTION_BLOCK` (`"block"`) iff `mode=="enforce"`, else `"notify"`. Config default `TAINT_FLOOR_MODE="notify"` (`config.py:147`). `invocation.py:650-712` drives it: `_action==BLOCK` ⇒ audit deny + raise `TaintFloorDenyError` (403 / JSON-RPC error); `_action=="notify"` ⇒ allow + `_taint_notice` in `_meta`, `outcome="allow"` audit.
+- **WI-2 — REAL fast-agent conformance.** `consumer/hooks.py` async two-arg contract + `consumer/fastagent_runner.py` driving the real `ToolRunner.generate_tool_call_response()`; redaction proven to happen pre-model turn (this harness, unchanged from Loop 5).
+- **WI-3 — full reason coverage in enforce.** `trust_enforce_denies(enforce, verdict) = enforce and not verdict.accepted` replaces the 4-reason `startswith` allowlist; stale + EKU-rejected envelopes (missed by the old allowlist) now DENY.
+- **WI-4 — enforce-semantics reconciliation.** Documented at the enforce seam: the gateway self-verifies its OWN freshly-signed envelope (cannot catch a downstream wire MITM — that is the independent consumer's job against a pinned anchor). Article must not conflate the two.
+
+**3-critic verdict (Codex critic): `wi_true = {WI1: true, WI2: true, WI3: true, WI4: true}`, `still_false = []`.** All four contested claims are now code-verified true; nothing left false.
+
+**Critic evidence (WI-1 taint floor — notify vs enforce, both real + tested + comparable):**
+- Real, comparable code paths as above (`taint_floor.py:93`, `config.py:147`, `invocation.py:650-712`).
+- Test run (`proxy/.venv/bin/python -m pytest ... -v`): **5 passed in 0.29s**
+  - `tests/unit/test_taint_floor.py::test_deny_in_enforce_mode_blocks`
+  - `tests/unit/test_taint_floor.py::test_deny_in_notify_mode_notifies`
+  - `tests/unit/test_taint_floor.py::test_unknown_mode_degrades_to_notify_never_blocks`
+  - `tests/unit/services/test_invocation_taint_notices.py::test_taint_enforce_mode_denies_and_audits_deny`
+  - `tests/unit/services/test_invocation_taint_notices.py::test_taint_notify_only_call_site_emits_empty_deny_reasons_and_notice`
+- **Non-vacuous:** the enforce test patches `TAINT_FLOOR_MODE="enforce"` and calls the REAL `inv_mod.invoke_tool(...)`, asserting `pytest.raises(TaintFloorDenyError)` + exactly one `outcome=="deny"` audit carrying a `taint_floor` deny_reason; the notify test asserts `deny_reasons==[]` + the notice text. Full taint-floor test file: 28 passed.
+
+**Remaining `still_false`: none.** All four WIs verified true; the two Loop-4 MEDIUMs (global monotonic Biba floor; containment invariant living in `hooks.py` rather than `TrustGate`) remain open design notes, unchanged. Real live-LLM turn still stubbed (fake model over the real hook path).
