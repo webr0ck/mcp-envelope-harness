@@ -1,0 +1,14 @@
+# Normalise to LF in the repository. A CRLF shell script is not executable on
+# macOS or Linux — the kernel reads the shebang as `/usr/bin/env bash\r` and the
+# demo dies before it starts. This file exists so an edit from a Windows host
+# cannot silently break the entry point again.
+* text=auto eol=lf
+
+# PowerShell is Windows-only; leave it in the line ending Windows expects.
+*.ps1 text eol=crlf
+
+# Binary — never touch.
+*.png binary
+*.jpg binary
+*.pcap binary
+*.db binary

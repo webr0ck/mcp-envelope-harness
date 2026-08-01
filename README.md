@@ -3,13 +3,54 @@
 An **out-of-tree consumer** for the MCP trust envelope: it verifies a signed origin
 assertion on a tool result and *changes what it does* based on the verdict.
 
-Companion to [purplehootie.com](https://purplehootie.com) — MCP Security, Part 4.
+**What it demonstrates.** A model reads a poisoned issue and is talked into mailing its
+own session token to an attacker. It is talked into it just as successfully with the gate
+on as with the gate off — but with the gate on, the mail never sends, because reading a
+tier-0 source dropped the Biba integrity floor below what the egress tool requires.
+**Persuasion succeeds; capability is gone.** A second scenario shows why the *signature*
+earns its keep on top of that: across an organisational boundary, through an untrusted
+relay, no single static trust value for a server can both permit legitimate work and
+contain attacker-writable content. A signed per-result rank can.
 
-> ## Runtime dependency note
-> The web service and verifier tests require the private `mcp_trust_verifier` wheel from
-> the sibling `mcp-security-platform` repository. The interactive console client has a
-> pinned dependency manifest and can run independently against the Mac-hosted service.
-> See [`manual_lab/README.md`](manual_lab/README.md) for macOS and Windows instructions.
+## Run it
+
+Python 3.12 or newer.
+
+```bash
+git clone https://github.com/webr0ck/mcp-envelope-harness
+cd mcp-envelope-harness
+python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
+
+./run_demo.sh                                  # 8 wire cases vs a real MITM proxy
+./.venv/bin/python -m federation.run_demo      # cross-boundary: 5 cases, 3 processes
+./.venv/bin/python -m pytest -q                # 23 tests
+```
+
+The APT test needs a local OpenAI-compatible LLM endpoint and is run separately — see
+[`apt/README.md`](apt/README.md).
+
+Everything above passes offline with no API key and no network egress. A scenario about
+exfiltration should not itself ship your context to a third party.
+
+## Read this before quoting the APT result
+
+Four limits, stated up front rather than in a footnote:
+
+1. **n=1.** One run of one scenario. This is a demonstration that the mechanism engages,
+   not a measurement of how often it would.
+2. **One small model** (Qwen2.5-Coder-3B). A more capable model may be persuaded
+   differently, or not at all. Nothing here characterises models in general.
+3. **The consumer is patched at runtime.** Stock fast-agent 0.9.22 drops `_meta` from tool
+   results, which destroys the envelope before the gate can see it.
+   `apt/fastagent_meta_shim.py` monkey-patches that in-process. The defect is real and
+   demonstrated in `apt/test_meta_stripping.py`, but the result depends on a patch that is
+   not upstream.
+4. **Cross-call binding is forfeited** in this configuration. The envelope binds a label to
+   one call's content; it does not carry that binding across the conversation.
+
+A fifth, structural one: the containment win in the APT test belongs to the **Biba floor**,
+which is local and needs no cryptography at all. The signature's necessity case is the
+cross-boundary one below — do not credit the envelope for the APT result.
 
 ## What's here
 
@@ -69,9 +110,15 @@ Run the cross-platform three-process demo with:
 python -m federation.run_demo
 ```
 
-This verifier-backed demo requires Python 3.12+ and the private
-`mcp_trust_verifier` wheel. See [`federation/README.md`](federation/README.md) for
-local and split-host commands.
+Signing and verification both happen locally, so this needs Python 3.12+ and the
+[`mcp-trust-verifier`](https://github.com/webr0ck/mcp-security-platform/tree/main/sdk/mcp-trust-verifier)
+package on every host running an Org A or Org B component. See
+[`federation/README.md`](federation/README.md) for local and split-host commands.
+
+The specification this implements is
+[SPEC-0001](https://github.com/webr0ck/security-specs/blob/main/specs/0001-mcp-signed-trust-envelope.md);
+the federation design it gestures at, but does **not** fully implement, is
+[SPEC-0002 §6](https://github.com/webr0ck/security-specs/blob/main/specs/0002-mcp-content-classification-federated-trust-ai-provenance.md).
 
 ## What this does not do
 

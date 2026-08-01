@@ -20,8 +20,9 @@ also proves that the intermediary cannot turn public rank 0 into internal rank 2
 
 ## Run locally on macOS, Linux, or Windows
 
-The verifier wheel declares Python 3.12 or newer. Use a Python 3.12+ environment with
-the repository dependencies and the private `mcp_trust_verifier` wheel installed:
+The verifier declares Python 3.12 or newer. Install the repository dependencies
+(`pip install -r requirements.txt` at the repository root, which includes
+`mcp-trust-verifier`) into a Python 3.12+ environment:
 
 ```bash
 python -m federation.run_demo
@@ -80,15 +81,23 @@ python -m federation.consumer \
 
 Restrict these unauthenticated lab listeners with host firewall or private networking.
 
-## What “RFC federation” means here
+## What this does and does not implement
 
-The earlier review's “RFC §6 federation” is **not an IETF RFC citation**. It refers to
-the platform project's internal RFC-0002 draft. In the current executable specification,
-federation and trust-scope are §5; §6 is AI provenance. An older generated status table
-uses §6 for federation, so the section reference has drifted and should not be quoted as
-an external standard.
+The specifications are published at
+[github.com/webr0ck/security-specs](https://github.com/webr0ck/security-specs). They are
+**not** IETF RFCs and are not on any standards track — they are working design
+specifications, and citations to them should not be quoted as an external standard.
 
-This demonstration proves the RFC's motivating substrate: an authenticated label can
-survive an administrative boundary and an untrusted relay. It is **not** a complete
-RFC-0002 federation implementation. Signed trust-list governance, issuer scope ceilings,
-transparency, revocation, and rollback protection remain separate work.
+- [SPEC-0001](https://github.com/webr0ck/security-specs/blob/main/specs/0001-mcp-signed-trust-envelope.md)
+  — the signed envelope. Implemented, and what this demo exercises.
+- [SPEC-0002 §6](https://github.com/webr0ck/security-specs/blob/main/specs/0002-mcp-content-classification-federated-trust-ai-provenance.md)
+  — federated trust. Specified, **not** implemented.
+
+This demonstration proves the substrate that §6 is built on: an authenticated per-result
+label can survive an administrative boundary and an untrusted relay. It is not a
+federation implementation. Signed trust-list governance, issuer scope ceilings,
+transparency logging, revocation, and rollback protection all remain unbuilt.
+
+(If you are reading an older note that puts federation at §5 and AI provenance at §6,
+that is the v0.1 section numbering. v0.3 inserted a threat model at §3 and shifted
+everything after it: federation is §6, AI provenance is §7.)

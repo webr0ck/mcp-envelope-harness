@@ -55,8 +55,9 @@ by this project.
 - Python 3.11 or newer for the remote console client by itself
 - Git
 - The `mcp-envelope-harness` repository
-- The sibling `mcp-security-platform` repository, used to build the private
-  `mcp-trust-verifier` wheel
+- `mcp-trust-verifier`, from the reference implementation's public repository. It is
+  not on PyPI; `pip install -r requirements.txt` at the repository root fetches it,
+  or build the wheel from a local checkout of `mcp-security-platform`
 - Optional: Podman or Docker for the container installation
 
 The examples assume this layout:
@@ -125,7 +126,8 @@ Internet.
 
 ## Run with Podman or Docker
 
-The verifier is private and not fetched from PyPI. Stage its wheel inside the ignored
+The verifier is not published to PyPI, so the container build cannot resolve it from
+the index. Stage its wheel inside the ignored
 `manual_lab/vendor/` build directory:
 
 ```bash
@@ -269,8 +271,8 @@ py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r manual_lab\requirements.runtime.txt
 ```
 
-The remote console client does not import `mcp_trust_verifier`; that private wheel is
-needed only when the web/MCP service or its full tests run on the same machine.
+The remote console client does not import `mcp_trust_verifier`; that package is needed
+only when the web/MCP service or its full tests run on the same machine.
 
 Set the environment-specific SSH host and lab URL. Confirm that SSH works without an
 interactive password prompt, then start the provided hidden tunnel:
