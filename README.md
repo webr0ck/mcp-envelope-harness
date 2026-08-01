@@ -5,11 +5,11 @@ assertion on a tool result and *changes what it does* based on the verdict.
 
 Companion to [purplehootie.com](https://purplehootie.com) — MCP Security, Part 4.
 
-> ## ⚠️ This repo is readable, not yet runnable
-> Six modules import `mcp_trust_verifier`, which ships from
-> `mcp-security-platform/sdk/mcp-trust-verifier/` on a **feature branch that is not
-> yet pushed**. Until that package is published there is no install path, and this
-> repo has no dependency manifest. Read it; you cannot currently execute it.
+> ## Runtime dependency note
+> The web service and verifier tests require the private `mcp_trust_verifier` wheel from
+> the sibling `mcp-security-platform` repository. The interactive console client has a
+> pinned dependency manifest and can run independently against the Mac-hosted service.
+> See [`manual_lab/README.md`](manual_lab/README.md) for macOS and Windows instructions.
 
 ## What's here
 
@@ -23,6 +23,21 @@ Companion to [purplehootie.com](https://purplehootie.com) — MCP Security, Part
 | `captures/mitm.jsonl` | on-the-wire capture (26 frames, 16 carrying the envelope key) |
 | `apt/` | the end-to-end injection test with a real model in the loop — see [`apt/README.md`](apt/README.md) |
 | `evidence/` | raw evidence JSON from the APT run described in the article |
+| `manual_lab/` | runnable web lab, unauthenticated MCP endpoint, interactive local-LLM console, skills, evidence, and cross-platform tests |
+
+## Interactive manual harness
+
+The console connects to an OpenAI-compatible LLM, accepts unauthenticated MCP servers at
+runtime, prints full color-highlighted LLM/MCP traffic, loads `SKILL.md` instructions,
+and demonstrates protected versus contained command execution. The same CLI runs on the
+Mac or natively on Windows through the included SSH tunnel helper.
+
+```bash
+python -m manual_lab.cli --color always
+```
+
+Complete setup, command reference, safe attack demonstration, expected evidence, and
+Windows PowerShell steps are in [`manual_lab/README.md`](manual_lab/README.md).
 
 ## The APT test in one paragraph
 
