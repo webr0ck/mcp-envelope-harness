@@ -1,0 +1,10 @@
+.git
+.venv
+.run
+.pytest_cache
+.fast-agent
+**/__pycache__
+**/*.pyc
+captures
+evidence
+logs

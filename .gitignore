@@ -5,4 +5,6 @@ __pycache__/
 _verify.out
 .fast-agent/
 .pytest_cache/
+graphify-out/
+manual_lab/vendor/
 apt/fastagent.config.yaml

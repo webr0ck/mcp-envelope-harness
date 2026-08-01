@@ -1,0 +1,992 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>MCP Trust Envelope Manual Lab</title>
+  <style>
+    :root {
+      --paper: #f9f8f6;
+      --card: #fff;
+      --ink: #1c1c1c;
+      --muted: #6a655e;
+      --line: #e4e0da;
+      --purple: #7b5ea7;
+      --purple-dark: #5d4a87;
+      --purple-soft: #f2eef9;
+      --green: #246345;
+      --green-soft: #edf6f0;
+      --red: #922f3e;
+      --red-soft: #fff0f2;
+      --amber: #8a551e;
+      --amber-soft: #fff5e8;
+      --mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --serif: Georgia, "Times New Roman", serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    :focus-visible { outline: 3px solid var(--purple); outline-offset: 2px; }
+    .shell { width: min(1180px, calc(100% - 2rem)); margin: auto; }
+    header.hero {
+      padding: 4rem 0 2.5rem;
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(280px, .6fr);
+      gap: 3rem;
+      align-items: end;
+      border-bottom: 1px solid var(--line);
+    }
+    .eyebrow {
+      margin: 0 0 .75rem;
+      color: var(--purple);
+      font: 700 .72rem var(--mono);
+      letter-spacing: .11em;
+      text-transform: uppercase;
+    }
+    h1, h2, h3 { font-family: var(--serif); font-weight: 400; }
+    h1 { max-width: 13ch; margin: 0; font-size: clamp(2.8rem, 7vw, 5.7rem); line-height: .98; letter-spacing: -.045em; }
+    .hero p.lede { max-width: 62ch; margin: 1.2rem 0 0; color: var(--muted); font-size: 1.05rem; }
+    .rule {
+      padding: 1rem;
+      border-left: 4px solid var(--red);
+      background: var(--red-soft);
+      font-size: .88rem;
+    }
+    .rule strong { color: var(--red); }
+
+    main { padding: 2rem 0 5rem; }
+    .section-label { margin: 0 0 .7rem; color: var(--muted); font: 700 .65rem var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .presets { display: grid; grid-template-columns: repeat(5, 1fr); gap: .7rem; margin-bottom: 2rem; }
+    .preset {
+      min-height: 112px;
+      padding: .9rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--card);
+      color: var(--ink);
+      text-align: left;
+    }
+    .preset:hover, .preset[aria-pressed="true"] { border-color: var(--purple); background: var(--purple-soft); }
+    .preset b { display: block; margin-bottom: .25rem; font-size: .82rem; }
+    .preset small { display: block; color: var(--muted); font-size: .68rem; line-height: 1.4; }
+
+    .workbench {
+      display: grid;
+      grid-template-columns: minmax(320px, .72fr) minmax(0, 1.28fr);
+      gap: 1rem;
+      align-items: start;
+    }
+    .panel { border: 1px solid var(--line); border-radius: 10px; background: var(--card); overflow: hidden; }
+    .panel-head { padding: 1rem 1.15rem; border-bottom: 1px solid var(--line); background: #fbfaf8; }
+    .panel-head h2 { margin: 0; font-size: 1.35rem; }
+    .panel-head p { margin: .25rem 0 0; color: var(--muted); font-size: .78rem; }
+    .form-body { padding: 1.15rem; }
+    label { display: block; margin-bottom: .35rem; font: 700 .68rem var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    textarea, select, input {
+      width: 100%;
+      border: 1px solid #cfc9c1;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+    }
+    textarea { min-height: 180px; resize: vertical; padding: .75rem; font-family: var(--mono); font-size: .78rem; line-height: 1.5; }
+    select, input { height: 42px; padding: 0 .65rem; }
+    .field { margin-bottom: 1rem; }
+    .field small { display: block; margin-top: .3rem; color: var(--muted); font-size: .68rem; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
+    .run {
+      width: 100%;
+      min-height: 48px;
+      border: 0;
+      border-radius: 7px;
+      background: var(--purple);
+      color: #fff;
+      font-weight: 800;
+    }
+    .run:hover { background: var(--purple-dark); }
+    .run:disabled { cursor: wait; opacity: .6; }
+
+    .result { min-height: 580px; }
+    .empty { display: grid; min-height: 580px; place-items: center; padding: 2rem; color: var(--muted); text-align: center; }
+    .outcome { margin: 1rem; padding: 1rem; border: 1px solid; border-radius: 8px; }
+    .outcome h2 { margin: 0; font-size: 1.45rem; }
+    .outcome p { margin: .35rem 0 0; font-size: .8rem; }
+    .outcome--pass { border-color: #b9d8c5; background: var(--green-soft); color: var(--green); }
+    .outcome--block { border-color: #dca5ae; background: var(--red-soft); color: var(--red); }
+    .outcome--vulnerable { border-color: #e7c28e; background: var(--amber-soft); color: var(--amber); }
+    .run-id { font: .67rem var(--mono); opacity: .82; }
+
+    .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 1rem; background: var(--line); border: 1px solid var(--line); }
+    .side { min-width: 0; padding: 1rem; background: var(--card); }
+    .side-kicker { color: var(--purple); font: 700 .62rem var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+    .side h3 { margin: .25rem 0 .7rem; font-size: 1.05rem; }
+    .facts { display: grid; gap: .45rem; margin: 0; }
+    .facts div { display: grid; grid-template-columns: 1fr auto; gap: .6rem; padding-bottom: .35rem; border-bottom: 1px solid var(--line); }
+    .facts dt { color: var(--muted); font-size: .68rem; }
+    .facts dd { margin: 0; font: 700 .66rem var(--mono); text-align: right; overflow-wrap: anywhere; }
+    .badge { display: inline-block; padding: .14rem .38rem; border: 1px solid currentColor; font: 700 .62rem var(--mono); text-transform: uppercase; }
+    .badge--ok { color: var(--green); background: var(--green-soft); }
+    .badge--no { color: var(--red); background: var(--red-soft); }
+    .badge--warn { color: var(--amber); background: var(--amber-soft); }
+    details { margin-top: .8rem; }
+    summary { color: var(--purple-dark); cursor: pointer; font-size: .72rem; font-weight: 700; }
+    pre {
+      max-height: 300px;
+      overflow: auto;
+      margin: .6rem 0 0;
+      padding: .75rem;
+      background: #1c1c1c;
+      color: #f4f0e9;
+      font: .65rem/1.5 var(--mono);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .delivered { margin: 0 1rem 1rem; padding: 1rem; border-left: 4px solid var(--purple); background: var(--purple-soft); }
+    .delivered b { display: block; margin-bottom: .4rem; font-size: .75rem; }
+    .delivered code { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .73rem; }
+    .explain { margin: 0 1rem 1rem; color: var(--muted); font-size: .75rem; }
+
+    .utility-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); gap: 1rem; margin-top: 2rem; }
+    .utility-body { padding: 1.15rem; }
+    .utility-body textarea { min-height: 122px; }
+    .button-row { display: flex; flex-wrap: wrap; gap: .55rem; }
+    .secondary-action {
+      min-height: 42px;
+      border: 1px solid var(--purple);
+      border-radius: 6px;
+      padding: .55rem .85rem;
+      background: var(--card);
+      color: var(--purple-dark);
+      font-weight: 750;
+    }
+    .secondary-action:hover { background: var(--purple-soft); }
+    .request-result { display: block; width: 100%; min-height: 74px; max-height: 260px; margin-top: 1rem; padding: .8rem; overflow: auto; border-left: 4px solid var(--line); background: #fbfaf8; font: .72rem/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .request-result[data-state="success"] { border-color: var(--green); background: var(--green-soft); }
+    .request-result[data-state="error"] { border-color: var(--red); background: var(--red-soft); color: var(--red); }
+    .utility-note { margin: .35rem 0 0; color: var(--muted); font-size: .68rem; }
+    .http-log-head { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+    .http-log-head h3 { margin: 0; font-size: 1rem; }
+    .http-log-list { display: grid; gap: .45rem; margin-top: .65rem; }
+    .http-log-row { margin: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+    .http-log-row summary { display: grid; grid-template-columns: auto 1fr auto; gap: .65rem; align-items: center; padding: .65rem; color: var(--ink); }
+    .http-log-method { color: var(--purple-dark); font: 800 .65rem var(--mono); }
+    .http-log-url { min-width: 0; overflow: hidden; font: .67rem var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+    .http-log-status { font: 800 .65rem var(--mono); }
+    .http-log-detail { padding: 0 .65rem .65rem; }
+    .http-log-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .3rem .7rem; margin: 0 0 .7rem; font-size: .7rem; }
+    .http-log-detail dt { color: var(--muted); }
+    .http-log-detail dd { min-width: 0; margin: 0; overflow-wrap: anywhere; font-family: var(--mono); }
+    .http-log-detail h4 { margin: .7rem 0 .3rem; font-size: .7rem; }
+    .http-log-detail pre { max-height: 210px; margin-top: 0; }
+    .command-builder { margin: 0 0 1rem; padding: .8rem; border: 1px solid var(--line); border-radius: 6px; background: #fbfaf8; }
+    .command-builder > label { margin-bottom: .55rem; }
+    .command-output { min-height: 96px; margin-top: .65rem; background: #1c1c1c; color: #f4f0e9; }
+
+    .comparison { margin-top: 2rem; padding: 1.1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+    .comparison-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .65fr); gap: 1rem; align-items: end; margin-bottom: 1rem; }
+    .comparison h2 { margin: 0; font-size: 1.6rem; }
+    .comparison-head p:last-child { margin: .25rem 0 0; color: var(--muted); font-size: .78rem; }
+    .matrix-principle { padding: .75rem; border-left: 4px solid var(--purple); background: var(--purple-soft); color: var(--purple-dark); font-size: .75rem; }
+    .comparison table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+    .comparison th, .comparison td { padding: .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .comparison th { background: #fbfaf8; color: var(--muted); font: 700 .64rem var(--mono); letter-spacing: .05em; text-transform: uppercase; }
+    .comparison td:first-child { font-family: var(--mono); font-weight: 800; }
+    .comparison tbody tr:nth-child(2) { background: var(--amber-soft); }
+    .comparison tbody tr:nth-child(3) { background: var(--green-soft); }
+
+    .tool-catalog { margin-top: 2rem; }
+    .tool-catalog-head { margin-bottom: .85rem; }
+    .tool-catalog h2 { margin: 0; font-size: 1.6rem; }
+    .tool-catalog-head > p:last-child { max-width: 72ch; margin: .25rem 0 0; color: var(--muted); font-size: .78rem; }
+    .tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+    .tool-card { min-width: 0; padding: 1rem; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+    .tool-card h3 { margin: 0; font-family: var(--mono); font-size: .85rem; font-weight: 800; }
+    .tool-description { min-height: 2.5em; margin: .4rem 0 .8rem; color: var(--muted); font-size: .75rem; }
+    .tool-return { margin: 0; padding-top: .75rem; border-top: 1px solid var(--line); }
+    .tool-return dt { color: var(--purple-dark); font: 700 .62rem var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+    .tool-return dd { margin: .35rem 0 0; color: var(--ink); font-size: .72rem; }
+    .tool-return code { font-family: var(--mono); overflow-wrap: anywhere; }
+    .published-preview { max-height: 8.5rem; margin-top: .55rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+    .logs { margin-top: 2rem; }
+    .logs-head { display: flex; align-items: end; justify-content: space-between; gap: 1rem; margin-bottom: .7rem; }
+    .logs h2 { margin: 0; font-size: 1.6rem; }
+    .refresh { border: 1px solid var(--line); border-radius: 6px; padding: .5rem .75rem; background: var(--card); color: var(--purple-dark); font-weight: 700; }
+    .connector-box { margin-top: 1rem; padding: 1rem; border: 1px solid var(--purple-line); background: var(--purple-soft); }
+    .connector-box h3 { margin: 0 0 .35rem; font-size: 1rem; }
+    .connector-box p { margin: 0 0 .7rem; color: var(--muted); font-size: .72rem; }
+    .publish-status { display: block; min-height: 1rem; margin-top: .5rem; color: var(--purple-dark); font: .65rem/1.4 var(--mono); overflow-wrap: anywhere; }
+    .publish-status[data-state="draft"] { color: var(--amber); }
+    .publish-status[data-state="live"] { color: var(--green); }
+    .mcp-targets { margin: 0 0 1rem; padding: .8rem; border: 1px solid var(--line); border-radius: 6px; }
+    .mcp-targets legend { padding: 0 .3rem; font: 700 .68rem var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+    .mcp-targets > p { margin: 0 0 .65rem; color: var(--muted); font-size: .68rem; }
+    .target-list { display: grid; gap: .45rem; }
+    .target-option { display: flex; gap: .55rem; align-items: start; margin: 0; font: 700 .7rem var(--mono); letter-spacing: 0; text-transform: none; }
+    .target-option input { width: 1rem; height: 1rem; margin: .15rem 0 0; flex: 0 0 auto; }
+    .log-list { display: grid; gap: .5rem; }
+    .log-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+    .log-group { min-width: 0; padding: .85rem; border: 1px solid var(--line); background: #fbfaf8; }
+    .log-group h3 { margin: 0 0 .65rem; font-size: 1.05rem; }
+    .log-origin { display: block; margin-bottom: .15rem; color: var(--purple); font: 700 .6rem var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+    .log-row { border: 1px solid var(--line); background: var(--card); font-size: .72rem; }
+    .log-row summary { display: grid; grid-template-columns: 160px 100px 1fr 150px 1.2rem; gap: .7rem; padding: .75rem; cursor: pointer; list-style: none; align-items: center; }
+    .log-row summary::-webkit-details-marker { display: none; }
+    .log-row summary::after { content: "›"; color: var(--purple); font-size: 1rem; transform: rotate(0); transition: transform .15s ease; }
+    .log-row[open] summary::after { transform: rotate(90deg); }
+    .log-row summary:hover { background: var(--purple-soft); }
+    .log-row code { font-family: var(--mono); overflow-wrap: anywhere; }
+    .log-detail { border-top: 1px solid var(--line); padding: .8rem; }
+    .log-detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .65rem; }
+    .log-detail h3 { margin: 0 0 .45rem; font-size: .85rem; }
+    .log-detail pre { margin: 0; max-height: 32rem; overflow: auto; padding: .7rem; background: #1c1c1c; color: #f4f0e9; font: .62rem/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+    .log-run-id { margin: 0 0 .7rem; color: var(--muted); }
+    .log-empty { padding: 1rem; border: 1px dashed var(--line); color: var(--muted); }
+    .error { margin: 1rem; padding: 1rem; border: 1px solid #dca5ae; background: var(--red-soft); color: var(--red); }
+    footer { padding: 1.4rem 0 3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .72rem; }
+
+    @media (max-width: 980px) {
+      .presets { grid-template-columns: repeat(3, 1fr); }
+      .workbench { grid-template-columns: 1fr; }
+      .tool-grid { grid-template-columns: 1fr; }
+      .log-groups { grid-template-columns: 1fr; }
+      .comparison-head { grid-template-columns: 1fr; }
+      .result, .empty { min-height: 0; }
+      .log-detail-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 700px) {
+      .shell { width: min(100% - 1rem, 1180px); }
+      header.hero { grid-template-columns: 1fr; gap: 1.3rem; padding-top: 2.5rem; }
+      .presets { grid-template-columns: 1fr; }
+      .preset { min-height: 0; }
+      .grid-2, .flow, .utility-grid { grid-template-columns: 1fr; }
+      .log-row summary { grid-template-columns: 1fr auto; gap: .25rem .7rem; }
+      .log-row summary::after { grid-column: 2; grid-row: 1 / span 4; }
+      .logs-head { align-items: start; flex-direction: column; }
+      .comparison thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+      .comparison table, .comparison tbody, .comparison tr, .comparison td { display: block; width: 100%; }
+      .comparison tr + tr { margin-top: .7rem; }
+      .comparison td { display: grid; grid-template-columns: minmax(120px, .8fr) minmax(0, 1.2fr); gap: .6rem; border-top: 0; }
+      .comparison td:first-child { border-top: 1px solid var(--line); }
+      .comparison td::before { content: attr(data-label); color: var(--muted); font: 700 .6rem var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+      .http-log-row summary { grid-template-columns: auto 1fr; }
+      .http-log-status { grid-column: 2; }
+    }
+    @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">MCP security · manual evidence lab</p>
+        <h1>Trust envelope, under your control.</h1>
+        <p class="lede">Generate a tool response, change its text or envelope condition, and see exactly what the producer issued, what crossed the wire, what the verifier decided, and what reached the model-side consumer.</p>
+      </div>
+      <aside class="rule">
+        <strong>Security rule:</strong> “no envelope passes” is shown only when protection is deliberately OFF. With enforcement ON, a missing envelope fails closed.
+      </aside>
+    </header>
+
+    <main>
+      <p class="section-label">Start with a known scenario</p>
+      <div class="presets" id="presets" aria-label="Scenario presets"></div>
+
+      <div class="workbench">
+        <section class="panel" aria-labelledby="config-title">
+          <div class="panel-head">
+            <h2 id="config-title">Response generator</h2>
+            <p>Every Run creates a fresh result ID and nonce.</p>
+          </div>
+          <form class="form-body" id="lab-form">
+            <div class="field">
+              <label for="content">Tool response text</label>
+              <textarea id="content" name="content" required maxlength="20000"></textarea>
+              <small>Edit this freely. It is treated as untrusted data, never HTML.</small>
+            </div>
+            <div class="grid-2">
+              <div class="field">
+                <label for="trust-tier">Signed trust tier</label>
+                <select id="trust-tier" name="trust_tier">
+                  <option value="0">0 · untrusted public</option>
+                  <option value="1">1 · trusted public</option>
+                  <option value="2">2 · internal</option>
+                  <option value="3">3 · user</option>
+                  <option value="4">4 · system</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="required">Required integrity</label>
+                <select id="required" name="required_integrity">
+                  <option value="0">0 · any accepted source</option>
+                  <option value="1">1 · privileged baseline</option>
+                  <option value="2">2 · internal minimum</option>
+                  <option value="3">3 · user-authoritative</option>
+                  <option value="4">4 · system only</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid-2">
+              <div class="field">
+                <label for="envelope">Envelope condition</label>
+                <select id="envelope" name="envelope">
+                  <option value="valid">Valid signed envelope</option>
+                  <option value="missing">No envelope</option>
+                  <option value="tampered">Content changed after signing</option>
+                  <option value="rogue">Signed by unpinned rogue CA</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="protection">Consumer protection</label>
+                <select id="protection" name="protection">
+                  <option value="enforce">ON · verify and enforce</option>
+                  <option value="off">OFF · vulnerable control</option>
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="tool-name">Tool name</label>
+              <input id="tool-name" name="tool_name" value="manual_response" maxlength="100">
+            </div>
+            <fieldset class="mcp-targets">
+              <legend>Configured payload targets</legend>
+              <p>Selected tools receive the response text above. Unselected tools receive their normal safe fixture.</p>
+              <div class="target-list">
+                <label class="target-option"><input type="checkbox" name="target_tool" value="read_news" checked>read_news</label>
+                <label class="target-option"><input type="checkbox" name="target_tool" value="list_pull_requests" checked>list_pull_requests</label>
+                <label class="target-option"><input type="checkbox" name="target_tool" value="get_last_jira_ticket" checked>get_last_jira_ticket</label>
+              </div>
+            </fieldset>
+          <button class="run" id="run" type="submit">Publish to MCP → run evidence</button>
+          <div class="connector-box">
+            <h3>MCP published state</h3>
+            <p>The form is a draft until the primary action publishes and runs it.</p>
+            <output class="publish-status" id="publish-status" aria-live="polite">Loading published state…</output>
+          </div>
+        </form>
+        </section>
+
+        <section class="panel result" aria-labelledby="result-title">
+          <div class="panel-head">
+            <h2 id="result-title">Observed result</h2>
+            <p>Nothing is inferred from button labels; this view renders the returned evidence.</p>
+          </div>
+          <div id="result" aria-live="polite">
+            <div class="empty">Choose a preset or edit the generator, then run one response.</div>
+          </div>
+        </section>
+      </div>
+
+      <section class="utility-grid" aria-label="Payload utilities">
+        <article class="panel" aria-labelledby="request-title">
+          <div class="panel-head">
+            <h2 id="request-title">Outbound request validator</h2>
+            <p>Send one controlled HTTP request from this host and inspect the actual response.</p>
+          </div>
+          <form class="utility-body" id="request-form">
+            <div class="grid-2">
+              <div class="field">
+                <label for="request-method">Method</label>
+                <select id="request-method">
+                  <option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="request-url">Public destination URL</label>
+                <input id="request-url" type="url" value="http://100.119.138.35:8900/api/health" required maxlength="2048" autocomplete="off">
+              </div>
+            </div>
+            <div class="field">
+              <label for="request-body">Request body</label>
+              <textarea id="request-body" maxlength="64000">Hello World!</textarea>
+              <p class="utility-note">The lab endpoint above and public HTTP(S) URLs are allowed. Other private, loopback, link-local, and redirect targets are blocked. Requests time out after 10 seconds.</p>
+            </div>
+            <div class="command-builder">
+              <label for="command-output">Convert request to a command</label>
+              <div class="button-row" role="group" aria-label="Request command format">
+                <button class="secondary-action command-format" type="button" data-format="curl">curl</button>
+                <button class="secondary-action command-format" type="button" data-format="telnet">telnet</button>
+                <button class="secondary-action command-format" type="button" data-format="nc">nc</button>
+              </div>
+              <textarea class="command-output" id="command-output" readonly placeholder="Choose curl, telnet, or nc to generate a command."></textarea>
+            </div>
+            <button class="run" id="send-request" type="submit">Send request from host</button>
+            <output class="request-result" id="request-result" aria-live="polite">No request sent yet.</output>
+            <div class="http-log-head">
+              <h3>Recent outbound requests</h3>
+              <button class="refresh" id="refresh-http-logs" type="button">Refresh log</button>
+            </div>
+            <p class="utility-note" id="http-log-path">Loading evidence path…</p>
+            <div class="http-log-list" id="http-log-list" aria-live="polite">
+              <div class="log-empty">Loading requests…</div>
+            </div>
+          </form>
+        </article>
+
+        <article class="panel" aria-labelledby="base64-title">
+          <div class="panel-head">
+            <h2 id="base64-title">Base64 encode / decode</h2>
+            <p>Transform UTF-8 text locally in the browser; nothing is sent to the server.</p>
+          </div>
+          <div class="utility-body">
+            <div class="field">
+              <label for="base64-input">Input</label>
+              <textarea id="base64-input" placeholder="Enter plain text or Base64"></textarea>
+            </div>
+            <div class="button-row">
+              <button class="secondary-action" id="base64-encode" type="button">Encode →</button>
+              <button class="secondary-action" id="base64-decode" type="button">Decode →</button>
+              <button class="secondary-action" id="base64-swap" type="button">Use output as input</button>
+            </div>
+            <div class="field" style="margin-top: 1rem">
+              <label for="base64-output">Output</label>
+              <textarea id="base64-output" readonly aria-live="polite"></textarea>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="comparison" aria-labelledby="comparison-title">
+        <div class="comparison-head">
+          <div>
+            <p class="section-label">Primary harness test</p>
+            <h2 id="comparison-title">Annotation versus enforcement</h2>
+            <p>Send the same low-integrity malicious payload through all three tools to isolate what the envelope annotation does—and does not do.</p>
+          </div>
+          <div class="matrix-principle"><strong>Expected conclusion:</strong> an annotation authenticates bytes and their integrity label. Only a consumer that enforces the label prevents unsafe content from reaching the model.</div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Tool</th><th>Envelope annotation</th><th>Enforcement</th><th>Expected result</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td data-label="Tool">read_news</td>
+              <td data-label="Envelope annotation">Missing</td>
+              <td data-label="Enforcement">Off</td>
+              <td data-label="Expected result">Malicious text reaches Claude</td>
+            </tr>
+            <tr>
+              <td data-label="Tool">list_pull_requests</td>
+              <td data-label="Envelope annotation">Present in <code>_meta</code></td>
+              <td data-label="Enforcement">Off</td>
+              <td data-label="Expected result">Malicious text still reaches Claude</td>
+            </tr>
+            <tr>
+              <td data-label="Tool">get_last_jira_ticket</td>
+              <td data-label="Envelope annotation">Present</td>
+              <td data-label="Enforcement">On</td>
+              <td data-label="Expected result">Original text is withheld</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="tool-catalog" aria-labelledby="tool-catalog-title">
+        <div class="tool-catalog-head">
+          <p class="section-label">MCP connector contract</p>
+          <h2 id="tool-catalog-title">Tools visible to the harness</h2>
+          <p>These are the exact tool names and descriptions returned by <code>tools/list</code>. The return notes show what a call delivers to the harness.</p>
+        </div>
+        <div class="tool-grid">
+          <article class="tool-card">
+            <h3><code>read_news</code></h3>
+            <p class="tool-description">Read the latest news available to this connector.</p>
+            <dl class="tool-return">
+              <dt>Harness receives</dt>
+              <dd>If targeted: the configured payload in <code>content[0].text</code>. Otherwise: the safe news fixture. No <code>_meta</code> field.</dd>
+            </dl>
+          </article>
+          <article class="tool-card">
+            <h3><code>list_pull_requests</code></h3>
+            <p class="tool-description">List the most recent pull requests available to this connector.</p>
+            <dl class="tool-return">
+              <dt>Harness receives</dt>
+              <dd>The targeted payload or safe PR fixture in <code>content[0].text</code>, plus an ES256 envelope at <code>_meta["io.mcp-security-platform/trust-envelope/v0.1"]</code>.</dd>
+            </dl>
+          </article>
+          <article class="tool-card">
+            <h3><code>get_last_jira_ticket</code></h3>
+            <p class="tool-description">Get the most recently updated Jira ticket available to this connector.</p>
+            <dl class="tool-return">
+              <dt>Harness receives</dt>
+              <dd>The targeted payload or safe Jira fixture when accepted; otherwise a refusal stub. Rejected original text is withheld.</dd>
+            </dl>
+          </article>
+          <article class="tool-card">
+            <h3><code>inspect_envelope_lab_state</code></h3>
+            <p class="tool-description">Read-only diagnostic: show the response and policy currently published from the web lab for the connector tools.</p>
+            <dl class="tool-return">
+              <dt>Harness receives</dt>
+              <dd>Formatted JSON containing the published configuration, delivery targets, and each tool's effective content source, envelope mode, and protection mode.</dd>
+            </dl>
+          </article>
+        </div>
+        <div class="tool-card published-preview" aria-live="polite">
+          <strong>Currently published configured payload</strong>
+          <div id="published-targets">Loading delivery targets…</div>
+          <div id="published-content">Loading connector state…</div>
+        </div>
+      </section>
+
+      <section class="logs" aria-labelledby="logs-title">
+        <div class="logs-head">
+          <div><p class="section-label">Correlated evidence</p><h2 id="logs-title">Recent consumer decisions</h2></div>
+          <button class="refresh" id="refresh" type="button">Refresh log</button>
+        </div>
+        <div class="log-groups">
+          <section class="log-group" aria-labelledby="ui-log-title">
+            <h3 id="ui-log-title">UI simulation requests</h3>
+            <div class="log-list" id="ui-log-list"><div class="log-empty">No UI requests yet.</div></div>
+          </section>
+          <section class="log-group" aria-labelledby="mcp-log-title">
+            <h3 id="mcp-log-title">MCP harness requests</h3>
+            <div class="log-list" id="mcp-log-list"><div class="log-empty">No MCP requests yet.</div></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Ephemeral lab PKI. Evidence is written under <code>.run/manual_lab/</code>. The service does not modify the platform gateway or production configuration.
+    </footer>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let scenarios = {};
+    let publishedConfig = null;
+    const connectorToolNames = ["read_news", "list_pull_requests", "get_last_jira_ticket"];
+
+    function badge(text, kind) {
+      const span = document.createElement("span");
+      span.className = `badge badge--${kind}`;
+      span.textContent = text;
+      return span.outerHTML;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, c => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      })[c]);
+    }
+
+    function setScenario(name) {
+      const s = scenarios[name];
+      if (!s) return;
+      $("content").value = s.content;
+      $("trust-tier").value = String(s.trust_tier);
+      $("required").value = String(s.required_integrity);
+      $("envelope").value = s.envelope;
+      $("protection").value = s.protection;
+      document.querySelectorAll(".preset").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.name === name)));
+      updatePublishState();
+    }
+
+    function renderPresets() {
+      const box = $("presets");
+      box.textContent = "";
+      Object.entries(scenarios).forEach(([name, s]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "preset";
+        button.dataset.name = name;
+        button.setAttribute("aria-pressed", "false");
+        const title = document.createElement("b");
+        title.textContent = s.title;
+        const description = document.createElement("small");
+        description.textContent = s.description;
+        button.append(title, description);
+        button.addEventListener("click", () => setScenario(name));
+        box.appendChild(button);
+      });
+    }
+
+    function outcomeFor(c) {
+      if (c.action === "proceed_unverified") {
+        return {
+          cls: "vulnerable",
+          title: "VULNERABLE — malicious content reached the consumer",
+          detail: "Protection was OFF, so the missing envelope was never checked."
+        };
+      }
+      if (c.action === "proceed") {
+        return {
+          cls: "pass",
+          title: "ALLOWED — signed result satisfied policy",
+          detail: `Verified integrity ${c.integrity_rank} met required integrity ${c.required_integrity}.`
+        };
+      }
+      return {
+        cls: "block",
+        title: "BLOCKED — original content was withheld",
+        detail: c.reason
+          ? `Decision reason: ${c.reason}`
+          : `Session floor ${c.session_floor} was below required integrity ${c.required_integrity}.`
+      };
+    }
+
+    function fact(label, value) {
+      return `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+    }
+
+    function renderResult(data) {
+      const p = data.producer, w = data.wire, c = data.consumer;
+      const outcome = outcomeFor(c);
+      const producerEnv = p.envelope.present ? `present · rank ${p.envelope.integrity_rank}` : "missing";
+      const wireEnv = w.envelope.present ? `present · ${w.envelope.algorithm}` : "missing";
+      const verdictKind = c.verdict === "accepted" ? "ok" : (c.verdict === "not_run" ? "warn" : "no");
+      const actionKind = c.action === "proceed" ? "ok" : (c.action === "proceed_unverified" ? "warn" : "no");
+
+      $("result").innerHTML = `
+        <div class="outcome outcome--${outcome.cls}">
+          <div class="run-id">${escapeHtml(data.run_id)}</div>
+          <h2>${escapeHtml(outcome.title)}</h2>
+          <p>${escapeHtml(outcome.detail)}</p>
+        </div>
+        <div class="flow">
+          <article class="side">
+            <span class="side-kicker">01 · producer</span>
+            <h3>Generated response</h3>
+            <dl class="facts">
+              ${fact("Trust tier", p.trust_tier)}
+              ${fact("Envelope", producerEnv)}
+              ${fact("Result ID", p.result_id)}
+              ${fact("Hash", p.envelope.content_hash || "—")}
+            </dl>
+            <details><summary>Raw producer result</summary><pre>${escapeHtml(JSON.stringify(data.raw.producer_result, null, 2))}</pre></details>
+          </article>
+          <article class="side">
+            <span class="side-kicker">02 · wire</span>
+            <h3>Received bytes</h3>
+            <dl class="facts">
+              ${fact("Manipulation", w.manipulation)}
+              ${fact("Envelope", wireEnv)}
+              ${fact("Content changed", p.content === w.content ? "no" : "yes")}
+              ${fact("Signer", data.config.envelope === "rogue" ? "untrusted CA" : "trusted lab CA")}
+            </dl>
+            <details><summary>Raw wire result</summary><pre>${escapeHtml(JSON.stringify(data.raw.wire_result, null, 2))}</pre></details>
+          </article>
+          <article class="side">
+            <span class="side-kicker">03 · consumer</span>
+            <h3>Policy action</h3>
+            <dl class="facts">
+              ${fact("Protection", c.protection)}
+              <div><dt>Verdict</dt><dd>${badge(c.verdict, verdictKind)}</dd></div>
+              ${fact("Reason", c.reason || "—")}
+              <div><dt>Action</dt><dd>${badge(c.action, actionKind)}</dd></div>
+              ${fact("Poison delivered", c.poison_delivered ? "YES" : "no")}
+            </dl>
+            <details><summary>Consumer record</summary><pre>${escapeHtml(JSON.stringify(c, null, 2))}</pre></details>
+          </article>
+        </div>
+        <div class="delivered">
+          <b>Exact text delivered toward the model</b>
+          <code>${escapeHtml(c.delivered_text)}</code>
+        </div>
+        <p class="explain">A valid signature does not identify malicious semantics. It authenticates the label and exact bytes. The low-integrity malicious preset is blocked because rank 0 cannot drive an operation requiring rank 1.</p>`;
+    }
+
+    function renderLogList(list, rows, producers, wires, emptyMessage) {
+      list.textContent = "";
+      if (!rows.length) {
+        const empty = document.createElement("div");
+        empty.className = "log-empty";
+        empty.textContent = emptyMessage;
+        list.appendChild(empty);
+        return;
+      }
+      rows.forEach(row => {
+        const producer = producers.get(row.run_id) || {error: "Producer record unavailable"};
+        const wire = wires.get(row.run_id) || {error: "Wire record unavailable"};
+        const details = document.createElement("details");
+        details.className = "log-row";
+        const when = new Date(row.ts * 1000).toLocaleString();
+        details.innerHTML = `
+          <summary aria-label="Open complete evidence for ${escapeHtml(row.run_id)}">
+            <span><span class="log-origin">${escapeHtml(row.origin || "legacy")}</span><code>${escapeHtml(when)}</code></span>
+            <code>${escapeHtml(row.verdict)}</code>
+            <span>${escapeHtml(row.reason || "accepted")}</span>
+            <code>${escapeHtml(row.action)}</code>
+          </summary>
+          <div class="log-detail">
+            <p class="log-run-id">Correlated run: <code>${escapeHtml(row.run_id)}</code></p>
+            <div class="log-detail-grid">
+              <section><h3>01 · Producer — generated and signed</h3><pre>${escapeHtml(JSON.stringify(producer, null, 2))}</pre></section>
+              <section><h3>02 · Wire — exact result received</h3><pre>${escapeHtml(JSON.stringify(wire, null, 2))}</pre></section>
+              <section><h3>03 · Consumer — verification and action</h3><pre>${escapeHtml(JSON.stringify(row, null, 2))}</pre></section>
+            </div>
+          </div>`;
+        list.appendChild(details);
+      });
+    }
+
+    async function loadLogs() {
+      const response = await fetch("/api/logs?limit=30");
+      const data = await response.json();
+      const byRun = records => new Map(records.map(record => [record.run_id, record]));
+      const producers = byRun(data.producer);
+      const wires = byRun(data.wire);
+      const originFor = row => row.origin || (connectorToolNames.includes(row.tool_name) ? "mcp" : "ui");
+      const rows = [...data.consumer].reverse();
+      const uiRows = rows.filter(row => originFor(row) === "ui");
+      const mcpRows = rows.filter(row => originFor(row) === "mcp");
+      renderLogList($("ui-log-list"), uiRows, producers, wires, "No UI requests yet.");
+      renderLogList($("mcp-log-list"), mcpRows, producers, wires, "No MCP requests yet.");
+    }
+
+    function formBody() {
+      return {
+        content: $("content").value,
+        trust_tier: Number($("trust-tier").value),
+        required_integrity: Number($("required").value),
+        envelope: $("envelope").value,
+        protection: $("protection").value,
+        tool_name: $("tool-name").value,
+        target_tools: [...document.querySelectorAll('input[name="target_tool"]:checked')]
+          .map(input => input.value)
+      };
+    }
+
+    function comparableConfig(config) {
+      return {
+        content: config.content,
+        trust_tier: Number(config.trust_tier),
+        required_integrity: Number(config.required_integrity),
+        envelope: config.envelope,
+        protection: config.protection,
+        tool_name: config.tool_name,
+        target_tools: [...(config.target_tools || connectorToolNames)].sort()
+      };
+    }
+
+    function updatePublishState() {
+      const status = $("publish-status");
+      if (!publishedConfig) return;
+      const isLive = JSON.stringify(comparableConfig(formBody())) === JSON.stringify(comparableConfig(publishedConfig));
+      status.dataset.state = isLive ? "live" : "draft";
+      if (isLive) {
+        status.textContent = `LIVE ON MCP · rank ${publishedConfig.trust_tier} · targets: ${publishedConfig.target_tools.join(", ") || "none"}`;
+      } else {
+        status.textContent = `DRAFT ONLY · MCP still uses rank ${publishedConfig.trust_tier} · targets: ${publishedConfig.target_tools.join(", ") || "none"}`;
+      }
+    }
+
+    $("lab-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const button = $("run");
+      button.disabled = true;
+      button.textContent = "Publishing and running…";
+      const body = formBody();
+      try {
+        const response = await fetch("/api/run", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+        renderPublishedContent(data.published_config);
+        renderResult(data);
+        await loadLogs();
+      } catch (error) {
+        $("result").innerHTML = `<div class="error"><strong>Run failed.</strong><br>${escapeHtml(error.message)}</div>`;
+      } finally {
+        button.disabled = false;
+        button.textContent = "Publish to MCP → run evidence";
+      }
+    });
+
+    $("refresh").addEventListener("click", loadLogs);
+    $("lab-form").addEventListener("input", updatePublishState);
+    $("lab-form").addEventListener("change", updatePublishState);
+
+    $("request-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const button = $("send-request");
+      const output = $("request-result");
+      button.disabled = true;
+      button.textContent = "Sending…";
+      output.dataset.state = "";
+      output.textContent = "Request in progress…";
+      try {
+        const response = await fetch("/api/http-request", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            method: $("request-method").value,
+            url: $("request-url").value,
+            body: $("request-body").value
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+        output.dataset.state = data.ok ? "success" : "error";
+        output.textContent = `${data.method} ${data.url}\n${data.status} ${data.reason} · ${data.elapsed_ms} ms · ${data.request_id}${data.truncated ? " · response truncated" : ""}\nContent-Type: ${data.content_type || "not supplied"}\n\n${data.body || "(empty response body)"}`;
+        await loadHttpLogs();
+      } catch (error) {
+        output.dataset.state = "error";
+        output.textContent = `Request failed: ${error.message}`;
+      } finally {
+        button.disabled = false;
+        button.textContent = "Send request from host";
+      }
+    });
+
+    function shellQuote(value) {
+      return `'${String(value).replaceAll("'", `'"'"'`)}'`;
+    }
+
+    function requestParts() {
+      const url = new URL($("request-url").value);
+      const method = $("request-method").value;
+      const body = $("request-body").value;
+      const port = url.port || (url.protocol === "https:" ? "443" : "80");
+      const target = `${url.pathname || "/"}${url.search}`;
+      const hostHeader = url.port ? `${url.hostname}:${url.port}` : url.hostname;
+      const contentHeaders = method === "GET" ? "" : `Content-Type: text/plain; charset=utf-8\r\nContent-Length: ${new TextEncoder().encode(body).length}\r\n`;
+      const raw = `${method} ${target} HTTP/1.1\r\nHost: ${hostHeader}\r\n${contentHeaders}Connection: close\r\n\r\n${method === "GET" ? "" : body}`;
+      return {url, method, body, port, raw};
+    }
+
+    function commandFor(format) {
+      const {url, method, body, port, raw} = requestParts();
+      if (format === "curl") {
+        const data = method === "GET" ? "" : ` --data-binary ${shellQuote(body)}`;
+        return `curl -i -X ${method}${data} ${shellQuote(url.href)}`;
+      }
+      if (format === "telnet") {
+        const warning = url.protocol === "https:" ? "# telnet does not negotiate TLS; use curl for this HTTPS URL.\n" : "";
+        return `${warning}telnet ${url.hostname} ${port}\n# After connecting, paste the request below, including the final blank line:\n${raw}`;
+      }
+      if (url.protocol === "https:") {
+        return `# nc alone does not negotiate TLS; equivalent TLS command:\nprintf %s ${shellQuote(raw)} | openssl s_client -quiet -connect ${url.hostname}:${port} -servername ${url.hostname}`;
+      }
+      return `printf %s ${shellQuote(raw)} | nc ${url.hostname} ${port}`;
+    }
+
+    document.querySelectorAll(".command-format").forEach(button => {
+      button.addEventListener("click", () => {
+        try {
+          $("command-output").value = commandFor(button.dataset.format);
+        } catch (error) {
+          $("command-output").value = `Cannot generate command: ${error.message}`;
+        }
+      });
+    });
+
+    async function loadHttpLogs() {
+      const response = await fetch("/api/http-logs?limit=20");
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || `HTTP ${response.status}`);
+      $("http-log-path").textContent = `Evidence file: ${data.path}`;
+      const list = $("http-log-list");
+      list.textContent = "";
+      if (!data.records.length) {
+        const empty = document.createElement("div");
+        empty.className = "log-empty";
+        empty.textContent = "No outbound requests yet.";
+        list.appendChild(empty);
+        return;
+      }
+      [...data.records].reverse().forEach(record => {
+        const responseData = record.response;
+        const details = document.createElement("details");
+        details.className = "http-log-row";
+        const status = responseData ? `${responseData.status} ${responseData.reason}` : "FAILED";
+        details.innerHTML = `
+          <summary>
+            <span class="http-log-method">${escapeHtml(record.request.method)}</span>
+            <span class="http-log-url">${escapeHtml(record.request.url)}</span>
+            <span class="http-log-status">${escapeHtml(status)}</span>
+          </summary>
+          <div class="http-log-detail">
+            <dl>
+              ${fact("Time", new Date(record.ts * 1000).toLocaleString())}
+              ${fact("Request ID", record.request_id)}
+              ${fact("Duration", responseData ? `${responseData.elapsed_ms} ms` : "—")}
+              ${fact("Error", record.error || "—")}
+            </dl>
+            <h4>Request body</h4>
+            <pre>${escapeHtml(record.request.body || "(empty)")}</pre>
+            <h4>Response headers</h4>
+            <pre>${escapeHtml(responseData ? JSON.stringify(responseData.headers, null, 2) : "(no response)")}</pre>
+            <h4>Response body</h4>
+            <pre>${escapeHtml(responseData?.body || "(empty)")}</pre>
+          </div>`;
+        list.appendChild(details);
+      });
+    }
+
+    $("refresh-http-logs").addEventListener("click", () => {
+      loadHttpLogs().catch(error => {
+        $("http-log-list").innerHTML = `<div class="error">Log refresh failed: ${escapeHtml(error.message)}</div>`;
+      });
+    });
+
+    function utf8ToBase64(value) {
+      const bytes = new TextEncoder().encode(value);
+      let binary = "";
+      bytes.forEach(byte => { binary += String.fromCharCode(byte); });
+      return btoa(binary);
+    }
+
+    function base64ToUtf8(value) {
+      const normalized = value.replace(/\s+/g, "");
+      const binary = atob(normalized);
+      return new TextDecoder("utf-8", {fatal: true}).decode(Uint8Array.from(binary, char => char.charCodeAt(0)));
+    }
+
+    $("base64-encode").addEventListener("click", () => {
+      $("base64-output").value = utf8ToBase64($("base64-input").value);
+    });
+    $("base64-decode").addEventListener("click", () => {
+      try {
+        $("base64-output").value = base64ToUtf8($("base64-input").value);
+      } catch (error) {
+        $("base64-output").value = `Decode error: ${error.message}`;
+      }
+    });
+    $("base64-swap").addEventListener("click", () => {
+      $("base64-input").value = $("base64-output").value;
+      $("base64-input").focus();
+    });
+
+    function renderPublishedContent(config) {
+      publishedConfig = config;
+      $("published-targets").textContent = `Sent to: ${config.target_tools.join(", ") || "no tools"}`;
+      $("published-content").textContent = config.content;
+      updatePublishState();
+    }
+
+    async function loadConnectorConfig() {
+      const response = await fetch("/api/connector/config");
+      const config = await response.json();
+      if (!response.ok) throw new Error(config.detail || `HTTP ${response.status}`);
+      renderPublishedContent(config);
+    }
+
+    async function init() {
+      const response = await fetch("/api/scenarios");
+      scenarios = await response.json();
+      renderPresets();
+      setScenario("valid");
+      await loadConnectorConfig();
+      await loadLogs();
+      await loadHttpLogs();
+    }
+    init().catch(error => {
+      $("result").innerHTML = `<div class="error">Initialization failed: ${escapeHtml(error.message)}</div>`;
+    });
+  </script>
+</body>
+</html>

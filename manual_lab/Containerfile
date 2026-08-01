@@ -1,0 +1,22 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY manual_lab/requirements.runtime.txt /tmp/requirements.runtime.txt
+COPY manual_lab/vendor/mcp_trust_verifier-0.1.0-py3-none-any.whl /tmp/mcp_trust_verifier-0.1.0-py3-none-any.whl
+RUN python -m pip install --no-cache-dir \
+    -r /tmp/requirements.runtime.txt \
+    /tmp/mcp_trust_verifier-0.1.0-py3-none-any.whl
+
+COPY consumer/ consumer/
+COPY producer/ producer/
+COPY manual_lab/ manual_lab/
+
+RUN mkdir -p /app/.run/manual_lab
+
+EXPOSE 8900
+
+CMD ["python", "-m", "manual_lab.app", "--host", "0.0.0.0", "--port", "8900"]
