@@ -25,15 +25,97 @@ PORTABLE_FILES = (
 )
 
 
-def test_skill_registry_discovers_and_activates_lab_skill():
+def test_lab_skill_is_available_but_hidden_from_naive_model_context():
     registry = SkillRegistry([SKILLS])
 
     assert "lab-command-runner" in registry.skills
     skill = registry.activate("lab-command-runner")
 
     assert skill.path.name == "SKILL.md"
-    assert "whoami" in registry.system_text()
+    assert registry.system_text("naive") == ""
+    assert "whoami" in registry.system_text("lab-aware")
     assert registry.active == ["lab-command-runner"]
+
+
+def test_general_skill_is_visible_in_both_model_contexts(tmp_path):
+    skill_dir = tmp_path / "ordinary-helper"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: ordinary-helper\ndescription: Ordinary helper\n---\n\nUse concise answers.\n",
+        encoding="utf-8",
+    )
+    registry = SkillRegistry([tmp_path])
+    registry.activate("ordinary-helper")
+
+    assert "Use concise answers." in registry.system_text("naive")
+    assert "Use concise answers." in registry.system_text("lab-aware")
+
+
+def test_naive_prompt_does_not_disclose_lab_or_protection_state():
+    harness = ConsoleHarness("http://127.0.0.1:1/v1", "test", "http://lab", [SKILLS], Trace("off", False))
+    harness.skills.activate("lab-command-runner")
+
+    protected_prompt = harness._system_prompt()
+    harness.command_protection = False
+    bypassed_prompt = harness._system_prompt()
+
+    assert protected_prompt == bypassed_prompt
+    assert "helpful assistant with access to connected tools" in protected_prompt
+    for disclosure in (
+        "trust-envelope",
+        "security lab",
+        "command-protection",
+        "lab-command-runner",
+        "LAB_ATTACK_COMMAND",
+        "whoami",
+    ):
+        assert disclosure not in protected_prompt
+    asyncio.run(harness.close())
+
+
+def test_lab_aware_prompt_preserves_explicit_experiment_context():
+    harness = ConsoleHarness(
+        "http://127.0.0.1:1/v1",
+        "test",
+        "http://lab",
+        [SKILLS],
+        Trace("off", False),
+        model_context="lab-aware",
+    )
+    harness.skills.activate("lab-command-runner")
+
+    prompt = harness._system_prompt()
+
+    assert "MCP trust-envelope security lab" in prompt
+    assert "command-protection state is ON" in prompt
+    assert "LAB_ATTACK_COMMAND" in prompt
+    asyncio.run(harness.close())
+
+
+def test_model_context_cli_defaults_to_naive_and_accepts_lab_aware():
+    parser = build_parser()
+
+    assert parser.parse_args([]).model_context == "naive"
+    assert parser.parse_args(["--model-context", "lab-aware"]).model_context == "lab-aware"
+
+
+def test_switching_model_context_clears_prior_conversation():
+    async def exercise() -> None:
+        harness = ConsoleHarness(
+            "http://127.0.0.1:1/v1",
+            "test",
+            "http://lab",
+            [SKILLS],
+            Trace("off", False),
+        )
+        harness.history.append({"role": "user", "content": "prior lab exchange"})
+
+        assert await harness.command("/context lab-aware")
+        assert harness.model_context == "lab-aware"
+        assert harness.history == []
+        await harness.close()
+
+    asyncio.run(exercise())
 
 
 def test_lab_command_executor_runs_allowlist_without_shell(tmp_path):

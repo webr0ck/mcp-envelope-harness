@@ -32,6 +32,8 @@ The console connects to an OpenAI-compatible LLM, accepts unauthenticated MCP se
 runtime, prints full color-highlighted LLM/MCP traffic, loads `SKILL.md` instructions,
 and demonstrates protected versus contained command execution. The same CLI runs on the
 Mac or natively on Windows through the included SSH tunnel helper.
+It defaults to a neutral `naive` model context for realistic client behavior and also
+offers an explicit `lab-aware` context for instructional runs.
 
 ```bash
 python -m manual_lab.cli --color always

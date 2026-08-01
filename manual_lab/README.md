@@ -300,6 +300,7 @@ Run the same console natively under Windows Python:
 ```powershell
 .\.venv\Scripts\python.exe -m manual_lab.cli `
   --lab-url $env:MANUAL_LAB_URL `
+  --model-context naive `
   --color always
 ```
 
@@ -373,6 +374,7 @@ LAB_BASE_URL="${MANUAL_LAB_URL:-http://127.0.0.1:8900}"
   --model qwen2.5-coder-3b-instruct-q4_k_m.gguf \
   --lab-url "$LAB_BASE_URL" \
   --mcp "$LAB_BASE_URL/mcp/" \
+  --model-context naive \
   --color always \
   --ask 'Call inspect_envelope_lab_state and summarize it.'
 ```
@@ -396,10 +398,25 @@ Inspect and activate skills from the prompt:
 /status
 ```
 
-Active skill instructions are injected into the next LLM request and are visible in
-the highlighted `LLM SEND` payload. General skills affect the model instructions only.
-The bundled `lab-command-runner` additionally connects to the contained demonstration
-executor described below.
+The console has two independent model-context modes:
+
+- `naive` (the default) uses a neutral assistant prompt. It does not tell the model
+  that this is a security lab, disclose the protection state, or reveal the attack
+  marker grammar and command allowlist.
+- `lab-aware` preserves the explicit security-lab prompt and sends the bundled lab
+  skill instructions to the model.
+
+Switch modes with `/context naive|lab-aware` or start with
+`--model-context naive|lab-aware`. Switching mode clears conversation history so a
+previous lab-aware exchange cannot prime a later naive run. Ordinary active skills are
+injected in both modes and remain visible in the highlighted `LLM SEND` payload. The
+bundled `lab-command-runner` declares `model_context: lab-aware`, so in naive mode it
+gates only the harness-side contained executor described below and is absent from the
+model payload.
+
+For a credible casual-client run, inspect `LLM SEND`: its system message must not
+contain `trust-envelope`, the command-protection state, `LAB_ATTACK_COMMAND`, or the
+lab command allowlist.
 
 ### Demonstrate protected versus bypassed execution
 
@@ -431,6 +448,7 @@ First activate the skill, connect MCP, and publish the vulnerable preset:
 ```text
 /mcp add http://127.0.0.1:8900/mcp/ lab
 /skill use lab-command-runner
+/context naive
 /lab publish malicious_no_envelope_unprotected
 ```
 

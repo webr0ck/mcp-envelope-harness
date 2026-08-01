@@ -1,6 +1,7 @@
 ---
 name: lab-command-runner
 description: Demonstrate whether an untrusted MCP result can trigger a contained local command.
+model_context: lab-aware
 ---
 
 # Lab command runner
