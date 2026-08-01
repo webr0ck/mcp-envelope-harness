@@ -23,6 +23,7 @@ Companion to [purplehootie.com](https://purplehootie.com) — MCP Security, Part
 | `captures/mitm.jsonl` | on-the-wire capture (26 frames, 16 carrying the envelope key) |
 | `apt/` | the end-to-end injection test with a real model in the loop — see [`apt/README.md`](apt/README.md) |
 | `evidence/` | raw evidence JSON from the APT run described in the article |
+| `federation/` | comparative Org A → hostile relay → Org B demo: portability, safety, and utility |
 | `manual_lab/` | runnable web lab, unauthenticated MCP endpoint, interactive local-LLM console, skills, evidence, and cross-platform tests |
 
 ## Interactive manual harness
@@ -52,6 +53,25 @@ arm actually exfiltrates *and* the protected arm records an attempted-then-denie
 a clean protected arm cannot pass vacuously. See `apt/run_apt_test.py` and the honest
 limitations in `apt/README.md` — including that this is one small model (Qwen2.5-Coder-3B)
 and n=1.
+
+## Why the envelope, not only the floor?
+
+The APT test proves containment: a verified rank-0 read lowers the Biba floor and removes
+the privileged capability. The comparative [`federation/`](federation/README.md) scenario
+proves portability: one remote server emits both internal and public-writable results,
+and no static unsigned server rank can both allow legitimate work and contain the poison.
+The signed per-result rank survives an untrusted relay, while a relay attempt to raise it
+is rejected.
+
+Run the cross-platform three-process demo with:
+
+```bash
+python -m federation.run_demo
+```
+
+This verifier-backed demo requires Python 3.12+ and the private
+`mcp_trust_verifier` wheel. See [`federation/README.md`](federation/README.md) for
+local and split-host commands.
 
 ## What this does not do
 

@@ -24,6 +24,7 @@ The consumer verifies using the **shipped** `mcp-trust-verifier` wheel (same cod
 - [x] **Structured logs** (JSONL) of every verdict + action, per case — `logs/verdicts.jsonl`
 - [x] One `run_demo.sh` orchestrates start→exercise→teardown, reproducible, exits non-zero on any miss (verified: exit 1 when a case regresses)
 - [x] Acceptance test passes ALL cases — `tests/test_harness.py` + `tests/test_hooks.py` (14 passed) + `run_demo.sh` (8/8 over sockets)
+- [x] **Cross-boundary motivation demo.** `federation/` compares the same Org A server under unsigned/default-trusted, unsigned/default-untrusted, and signed per-result policies through an untrusted relay. It proves that static server trust cannot provide both safety and utility, while signed rank permits internal work, contains public poison, and rejects an in-flight rank raise. The components can run locally as three processes or on separate hosts.
 - [x] Security review: no unresolved HIGH/CRITICAL findings — **MET (Loop 4).** `consumer/driver.py` now routes every wire result through the REAL hook seam (`consumer.hooks.before_tool_call` + `after_tool_call`) instead of `TrustGate.evaluate()` directly, and asserts on the wire result that on any refuse verdict the poisoned markers (`SYSTEM OVERRIDE` / `id_rsa` / `evil.example`) are GONE and the `[trust-gate REFUSED …]` stub is present. `run_demo.sh` gates on the driver exit code, so all 6 refuse cases (mitm_tamper, rogue_cert, no_envelope, replay, replay_seen, stale) now prove containment against real MITM-tampered wire bytes — not a synthetic context object. Non-vacuous: neutering `_redact_result` makes the wire check fail (verified). Remaining items are MEDIUM/documented (global monotonic Biba floor; stubbed LLM loop; app-level vs packet capture). **Unresolved HIGH: 0. No CRITICAL.**
 
 ## Loop log
@@ -220,3 +221,11 @@ Purpose: an independent code-review + 3-critic pass on the Loop 5 work items (WI
 - **Non-vacuous:** the enforce test patches `TAINT_FLOOR_MODE="enforce"` and calls the REAL `inv_mod.invoke_tool(...)`, asserting `pytest.raises(TaintFloorDenyError)` + exactly one `outcome=="deny"` audit carrying a `taint_floor` deny_reason; the notify test asserts `deny_reasons==[]` + the notice text. Full taint-floor test file: 28 passed.
 
 **Remaining `still_false`: none.** All four WIs verified true; the two Loop-4 MEDIUMs (global monotonic Biba floor; containment invariant living in `hooks.py` rather than `TrustGate`) remain open design notes, unchanged. Real live-LLM turn still stubbed (fake model over the real hook path).
+
+### Loop 6 — demonstrate why the envelope crosses a boundary (2026-08-01)
+
+- Added `federation/producer.py`, `relay.py`, and `consumer.py` as separate socket processes representing Org A, an untrusted intermediary, and Org B.
+- Org A's one server returns both rank-2 internal content and rank-0 public-writable content. This makes the comparison non-vacuous: default-trusted unsigned handling permits the attack action, while default-untrusted unsigned handling blocks legitimate work.
+- Signed per-result handling achieves both outcomes: internal work proceeds, public poison lowers the floor and blocks the privileged action, and a relay attempt to raise rank 0→2 fails with `signature_invalid`.
+- `tests/test_federation_demo.py` asserts all five comparison cases plus ten captured relay frames. Verified with the shipped verifier environment: **1 federation test passed; 23 federation + existing regression tests passed** after normal APT runtime setup.
+- Clarified that “RFC §6 federation” is not an IETF RFC. It refers to internal RFC-0002, whose current executable oracle places federation/trust-scope in §5 and AI provenance in §6. Full trust-list governance, scope ceilings, transparency, revocation, and rollback protection remain out of scope for this demo.
