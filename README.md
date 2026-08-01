@@ -33,7 +33,7 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 
 ./run_demo.sh                                  # 8 wire cases vs a real MITM proxy
 ./.venv/bin/python -m federation.run_demo      # cross-boundary: 5 cases, 3 processes
-./.venv/bin/python -m pytest -q                # 28 tests
+./.venv/bin/python -m pytest -q                # 37 tests
 ```
 
 The APT test needs a local OpenAI-compatible LLM endpoint and is run separately - see
@@ -104,6 +104,33 @@ arm actually exfiltrates *and* the protected arm records an attempted-then-denie
 a clean protected arm cannot pass vacuously. See `apt/run_apt_test.py` and the honest
 limitations in `apt/README.md` - including that this is one small model (Qwen2.5-Coder-3B)
 and n=1.
+
+## Two authorized calls, one untrusted influence
+
+`tests/test_two_authorized_calls.py` is the smallest honest statement of the problem, with
+no LLM in it. A support agent reads ticket SUP-4181 (allowlisted tool) and posts a summary
+back to the ticket thread (allowlisted tool, allowlisted destination). The attacker filed
+the ticket, and it asks the agent to append its session token to the reply. **Both requests
+are authorized, and the test asserts that** - `gateway_authorize` returns `ALLOW` for the
+leaking call and the honest call alike, because they are the same tool to the same
+destination and differ only in a body string nobody in the request path authored. Each
+request passes the gateway on its own terms; the failure lives in the relationship between
+them, and a per-call gate has no place to hold a relationship.
+
+The two mechanisms split the work cleanly, and the tests are grouped to keep them apart:
+
+- **taint** supplies the memory. Absorbing a rank-0 result drops the Biba session floor, so
+  the second call is judged on the fact that the first one happened. It is not a ban on
+  egress - reverse the order and the identical call goes through
+  (`test_taint_is_about_the_relationship_not_a_ban_on_the_tool`).
+- **the envelope** supplies the ground truth the memory runs on. Flip `integrity_rank` from
+  0 to 2 to dodge the floor and the edit invalidates the signature, so the forgery gets no
+  rank and no influence rather than a better one. It also lets one server be trusted and
+  untrusted at once: the same `ticket-system` emits attacker-filed tickets and its own
+  first-party acks, which no single static per-server rank can both permit and contain.
+
+Neither is sufficient alone. Taint without the envelope trusts the attacker's own label;
+the envelope without taint verifies a source and forgets it by the next call.
 
 ## Why the envelope, not only the floor?
 
