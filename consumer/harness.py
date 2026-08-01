@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import sys
 import time
 from pathlib import Path
 
@@ -40,8 +41,7 @@ class _MemStore:
 class _SqliteStore:
     """Durable, cross-instance single-use envelope cache (sqlite file).
 
-    Survives consumer restart and is SHARED by any consumer pointed at the same file —
-    closing the replay window across a gateway/agent fleet, not just within one process.
+    Survives consumer restart and is SHARED by any consumer pointed at the same file - closing the replay window across a gateway/agent fleet, not just within one process.
     `BEGIN IMMEDIATE` takes the write lock before the read so two instances racing the
     same new envelope can't both accept it (one blocks, then sees it already recorded).
     TTL-pruned each call; the verifier age-rejects anything older before it reaches here.
@@ -133,6 +133,15 @@ class TrustGate:
             "has_meta": bool((result.get("_meta") or {}).get(TRUST_ENVELOPE_KEY)),
         }
         if self.log_path:
-            with open(self.log_path, "a") as f:
-                f.write(json.dumps(rec) + "\n")
+            try:
+                with open(self.log_path, "a") as f:
+                    f.write(json.dumps(rec) + "\n")
+            except Exception as exc:  # noqa: BLE001
+                # AUDIT MUST NEVER GATE CONTAINMENT. This write happens after the verdict
+                # is computed but BEFORE the caller redacts, and fast-agent swallows any
+                # exception out of after_tool_call and forwards the ORIGINAL result
+                # (tool_runner.py ~635). So an unwritable log used to be a silent bypass:
+                # full disk, read-only mount, or a typo'd HARNESS_LOG disabled containment.
+                # Degrade to stderr and keep going - a lost log line is not a lost refusal.
+                print(f"[trust-gate] verdict log write failed ({exc}); rec={rec}", file=sys.stderr)
         return rec

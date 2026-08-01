@@ -1,17 +1,27 @@
 # Python 3.12+ (the verifier requires it).
 #
 # The verifier is published from the reference implementation's repository and
-# pulls in cryptography and jcs (RFC 8785 canonicalisation) itself — the signer
-# and the verifier MUST canonicalise identically, so it is deliberately the one
-# place those versions are pinned.
+# pulls in cryptography and jcs (RFC 8785 canonicalisation) itself.
+#
+# KNOWN GAP: it FLOORS them (cryptography>=44, jcs>=0.2.1) rather than pinning. The
+# signer and the verifier must canonicalise identically, so a jcs skew between the
+# two sides is an authenticity failure that surfaces as content_hash_mismatch - it
+# looks exactly like an attack. Nothing here prevents that today.
+#
+# KNOWN GAP: this tracks a branch, not a tag or commit. A clone today and a clone
+# next month are not the same verifier, and a compromise of that repo replaces the
+# security-critical component here silently. Pin it to a tag before relying on this
+# for anything real. See "Open problems" in the article.
 mcp-trust-verifier @ git+https://github.com/webr0ck/mcp-security-platform.git#subdirectory=sdk/mcp-trust-verifier
 
-# MCP client/server used by the stdio wire test and the demo servers.
-mcp>=1.28.1
+# MCP client/server used by the stdio wire test and the demo servers. Upper-bounded:
+# apt/fastagent_meta_shim.py patches by method name, and 2.x is a breaking release.
+mcp>=1.28.1,<2
 
-# The consumer under test. 0.9.22 is the version whose _meta-stripping defect
-# apt/fastagent_meta_shim.py works around; a newer release may not need the shim.
-fast-agent-mcp>=0.9.22
+# The consumer under test. Pinned, not floored: 0.9.22 is the version whose
+# _meta-stripping defect apt/fastagent_meta_shim.py works around by patching a
+# specific method - a newer release may not need the shim, or may break it silently.
+fast-agent-mcp==0.9.22
 
 # producer/server.py, attacks/mitm.py, federation/*, manual_lab/*
 fastapi>=0.115

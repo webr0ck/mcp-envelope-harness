@@ -1,5 +1,15 @@
 # mcp-envelope-harness
 
+> **This is a defensive security test harness, not an attack tool.** It contains live
+> prompt-injection payloads because a containment control that is never tested against real
+> poison proves nothing - several tests assert the payload *survives* in an unprotected
+> control arm, precisely so the protected arm's pass is not vacuous. The payloads are inert:
+> `evil.example` is RFC 2606 reserved and unroutable, `~/.ssh/id_rsa` appears only inside
+> string literals that are compared and redacted, nothing is executed, and the APT scenario
+> runs with no API key and no network egress. Everything binds `127.0.0.1` by default.
+> Read [SECURITY.md](SECURITY.md) before running `manual_lab/`, which serves those payloads
+> to a live LLM console without authentication.
+
 An **out-of-tree consumer** for the MCP trust envelope: it verifies a signed origin
 assertion on a tool result and *changes what it does* based on the verdict.
 
@@ -23,7 +33,7 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 
 ./run_demo.sh                                  # 8 wire cases vs a real MITM proxy
 ./.venv/bin/python -m federation.run_demo      # cross-boundary: 5 cases, 3 processes
-./.venv/bin/python -m pytest -q                # 23 tests
+./.venv/bin/python -m pytest -q                # 28 tests
 ```
 
 The APT test needs a local OpenAI-compatible LLM endpoint and is run separately - see

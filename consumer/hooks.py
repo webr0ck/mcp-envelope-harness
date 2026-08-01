@@ -131,6 +131,15 @@ def _redact_call_tool_result(ctr, reason: str) -> None:
                 setattr(ctr, attr, None)
             except Exception:
                 pass
+    # POST-CONDITION. Every assignment above is wrapped, so without this the function can
+    # swallow its own failure and return normally: the gate logs `action=refuse` while the
+    # unredacted poison still reaches the model. A control that reports a containment it
+    # did not perform is worse than no control. If neither assignment took (frozen model,
+    # validate_assignment, a wrapper type, a future CallToolResult), RAISE - the caller's
+    # handler blanks the whole result rather than trusting this.
+    got = getattr(ctr, "content", None)
+    if got and stub not in str(got):
+        raise RuntimeError("redaction no-op: tool result content survived redaction")
 
 
 def _contain(ctr, *, tool_name: str, result_id: str) -> dict:
@@ -200,21 +209,76 @@ async def after_tool_call(runner, message) -> None:
     """REAL fast-agent hook: verify every tool result, CONTAIN on refuse before the model turn.
 
     Async two-arg, awaited by fast-agent. Mutates each poisoned CallToolResult in
-    `message.tool_results` in place (fail-open safe — never raises). Verdicts are stashed
-    on `runner.trust_verdicts` for audit."""
+    `message.tool_results` in place. Verdicts are stashed on `runner.trust_verdicts`.
+
+    FAIL-CLOSED BY CONSTRUCTION, and this is the whole ballgame: fast-agent catches any
+    exception out of this hook and continues with the ORIGINAL, unredacted result
+    (tool_runner.py ~635, verified in 0.9.22). So raising here does not block the call -
+    it SILENTLY DISABLES containment. Anything that can throw between entry and redaction
+    is therefore a bypass: a missing/malformed HARNESS_ANCHOR, a typo'd
+    HARNESS_REQUIRED_INTEGRITY, an unwritable verdict log, or a `database is locked` from
+    the sqlite replay store under contention. Every result is redacted on ANY gate failure
+    rather than passed through. See tests/test_hooks.py::test_gate_exception_fails_closed.
+
+    "Anything that can throw" is meant literally, so the guard is the WHOLE body, not just
+    the per-result call: the loop header itself dereferences `message.tool_results`, and a
+    shape change there would otherwise escape and fail open exactly like the rest."""
     verdicts = []
-    for call_id, ctr in (getattr(message, "tool_results", None) or {}).items():
-        verdicts.append(
-            _contain(
-                ctr,
-                tool_name=_local_tool_name(_tool_name_for(runner, call_id)),
-                result_id=_result_id_for(ctr, call_id),
-            )
-        )
+    results = {}
+    try:
+        results = getattr(message, "tool_results", None) or {}
+        for call_id, ctr in results.items():
+            try:
+                rec = _contain(
+                    ctr,
+                    tool_name=_local_tool_name(_tool_name_for(runner, call_id)),
+                    result_id=_result_id_for(ctr, call_id),
+                )
+            except Exception as exc:  # noqa: BLE001
+                _redact_call_tool_result(ctr, "gate_error")  # may itself raise -> outer
+                rec = _gate_error_record(call_id, exc)
+                print(f"[trust-gate] gate failed, result REDACTED (fail-closed): {exc!r}",
+                      file=sys.stderr)
+            except BaseException:
+                # Cancellation/interrupt: neuter EVERY result, not just this one - the
+                # message object is mutated in place and is handed on as-is.
+                _blank_all(message, results)
+                raise
+            verdicts.append(rec)
+    except Exception as exc:  # noqa: BLE001
+        # The loop header, or a redactor post-condition, failed. Nothing about the results
+        # can be trusted now, so withhold all of them.
+        _blank_all(message, results)
+        verdicts = [_gate_error_record("unknown", exc)]
+        print(f"[trust-gate] hook failed, ALL results withheld (fail-closed): {exc!r}",
+              file=sys.stderr)
     try:
         runner.trust_verdicts = verdicts
     except Exception:
         pass
+
+
+def _gate_error_record(call_id: str, exc: BaseException) -> dict:
+    return {
+        "case": "fast-agent", "tool": "unknown", "result_id": call_id,
+        "verdict": "rejected", "reason": f"gate_error:{exc.__class__.__name__}",
+        "integrity_rank": 0, "action": "refuse", "error": str(exc),
+    }
+
+
+def _blank_all(message, results) -> None:
+    """Last resort: withhold every tool result. Try the normal redaction first so the model
+    still sees a refusal stub rather than a silent void; if even that fails, drop the whole
+    mapping. Losing the results is the acceptable outcome; forwarding them is not."""
+    for ctr in list(getattr(results, "values", lambda: [])()):
+        try:
+            _redact_call_tool_result(ctr, "gate_error")
+        except Exception:  # noqa: BLE001
+            try:
+                message.tool_results = {}
+                return
+            except Exception:  # noqa: BLE001
+                pass
 
 
 def _requested_tool_names(request) -> list[str]:

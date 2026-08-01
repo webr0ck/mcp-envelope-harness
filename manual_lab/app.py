@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import ipaddress
 import os
 import secrets
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -184,11 +186,38 @@ def http_logs(limit: int = 20) -> dict[str, Any]:
     return {"records": recent_http_logs(HTTP_LOG, limit), "path": str(HTTP_LOG)}
 
 
+def _is_loopback(host: str) -> bool:
+    """True only for addresses that cannot receive traffic from another machine."""
+    if host in ("localhost", "::1"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False  # a hostname we cannot resolve to loopback: treat as exposed
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8900)
     args = parser.parse_args()
+    # SAFETY GATE. This app serves live prompt-injection payloads and an LLM console
+    # that will act on them. That is the POINT - it is how the trust gate gets
+    # demonstrated - but it means anyone who can reach this port can drive the console.
+    # Default bind is loopback. Binding anywhere reachable is an explicit, deliberate act.
+    if not _is_loopback(args.host):
+        if os.environ.get("MANUAL_LAB_ALLOW_NONLOCAL") != "1":
+            raise SystemExit(
+                f"refusing to bind {args.host}: this lab serves prompt-injection payloads "
+                "and an LLM console with no authentication. Bind 127.0.0.1, or set "
+                "MANUAL_LAB_ALLOW_NONLOCAL=1 if you understand that everyone who can "
+                "reach this port can drive it."
+            )
+        print(
+            f"\n  !! manual_lab bound to {args.host}:{args.port} - REACHABLE OFF-HOST !!\n"
+            "  Unauthenticated. Serves injection payloads. Use a trusted network only.\n",
+            file=sys.stderr,
+        )
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")
 
 
