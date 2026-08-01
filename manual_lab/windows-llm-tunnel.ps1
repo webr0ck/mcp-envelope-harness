@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [string]$MacHost = "mi7t",
+    [string]$MacHost = $env:MANUAL_LAB_SSH_HOST,
     [int]$LocalPort = 11511,
     [int]$RemotePort = 11511,
     [switch]$Stop
@@ -24,6 +24,10 @@ if ($Stop) {
     }
     Remove-Item -LiteralPath $pidPath -ErrorAction SilentlyContinue
     exit 0
+}
+
+if ([string]::IsNullOrWhiteSpace($MacHost)) {
+    throw "Pass -MacHost <ssh-host> or set MANUAL_LAB_SSH_HOST."
 }
 
 $listener = Get-NetTCPConnection -State Listen -LocalPort $LocalPort -ErrorAction SilentlyContinue

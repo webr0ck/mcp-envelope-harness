@@ -402,7 +402,7 @@
               </div>
               <div class="field">
                 <label for="request-url">Public destination URL</label>
-                <input id="request-url" type="url" value="http://100.119.138.35:8900/api/health" required maxlength="2048" autocomplete="off">
+                <input id="request-url" type="url" placeholder="Loading configured self-test URL…" required maxlength="2048" autocomplete="off">
               </div>
             </div>
             <div class="field">
@@ -975,11 +975,19 @@
       renderPublishedContent(config);
     }
 
+    async function loadHealthConfig() {
+      const response = await fetch("/api/health");
+      const health = await response.json();
+      if (!response.ok) throw new Error(health.detail || `HTTP ${response.status}`);
+      if (!$('request-url').value) $('request-url').value = health.self_test_url;
+    }
+
     async function init() {
       const response = await fetch("/api/scenarios");
       scenarios = await response.json();
       renderPresets();
       setScenario("valid");
+      await loadHealthConfig();
       await loadConnectorConfig();
       await loadLogs();
       await loadHttpLogs();

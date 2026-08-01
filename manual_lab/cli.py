@@ -26,7 +26,7 @@ from mcp.client.streamable_http import streamable_http_client
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LLM_URL = "http://127.0.0.1:11511/v1"
-DEFAULT_LAB_URL = "http://100.119.138.35:8900"
+DEFAULT_LAB_URL = "http://127.0.0.1:8900"
 DEFAULT_MCP_URL = f"{DEFAULT_LAB_URL}/mcp/"
 ATTACK_COMMAND = re.compile(r"(?m)^LAB_ATTACK_COMMAND:\s*([^\r\n\]]+)")
 SAFE_COMMANDS = {"whoami", "pwd", "echo"}

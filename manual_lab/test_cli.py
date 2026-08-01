@@ -16,6 +16,13 @@ from manual_lab.core import MALICIOUS_TEXT
 
 SKILLS = Path(__file__).resolve().parent / "skills"
 README = Path(__file__).resolve().parent / "README.md"
+PORTABLE_FILES = (
+    README,
+    Path(__file__).resolve().parent / "cli.py",
+    Path(__file__).resolve().parent / "index.html",
+    Path(__file__).resolve().parent / "outbound.py",
+    Path(__file__).resolve().parent / "windows-llm-tunnel.ps1",
+)
 
 
 def test_skill_registry_discovers_and_activates_lab_skill():
@@ -107,6 +114,7 @@ def test_cli_defaults_to_safe_protection_and_full_trace():
     assert args.protection == "on"
     assert args.trace == "full"
     assert args.llm_url == "http://127.0.0.1:11511/v1"
+    assert args.lab_url == "http://127.0.0.1:8900"
 
 
 def test_readme_contains_complete_console_harness_runbook():
@@ -124,3 +132,19 @@ def test_readme_contains_complete_console_harness_runbook():
         "windows-llm-tunnel.ps1",
     ):
         assert text in readme
+
+
+def test_manual_lab_has_no_developer_specific_network_or_path_defaults():
+    forbidden = (
+        ".".join(("100", "119", "138", "35")),
+        "mi" + "7t",
+        "web" + "r0ck",
+        "pc-" + "r0ck",
+        "/" + "Users/",
+        "C:\\" + "Users\\",
+        "C:\\" + "Code\\",
+    )
+    for path in PORTABLE_FILES:
+        text = path.read_text(encoding="utf-8")
+        for marker in forbidden:
+            assert marker not in text, f"{path} contains machine-specific marker {marker!r}"

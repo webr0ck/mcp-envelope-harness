@@ -14,7 +14,6 @@ from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_ope
 
 ALLOWED_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 MAX_RESPONSE_BYTES = 65_536
-SELF_TEST_TARGET = ("100.119.138.35", 8900)
 
 
 class _NoRedirects(HTTPRedirectHandler):
@@ -22,14 +21,17 @@ class _NoRedirects(HTTPRedirectHandler):
         return None
 
 
-def _validate_public_url(url: str) -> str:
+def _validate_public_url(
+    url: str,
+    allowed_private_targets: set[tuple[str, int]] | None = None,
+) -> str:
     parsed = urlsplit(url.strip())
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("url must be an absolute http:// or https:// URL")
     if parsed.username or parsed.password:
         raise ValueError("credentials in URLs are not allowed")
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
-    if (parsed.hostname, port) == SELF_TEST_TARGET:
+    if (parsed.hostname, port) in (allowed_private_targets or set()):
         return parsed.geturl()
     try:
         addresses = {
@@ -50,13 +52,19 @@ def _validate_public_url(url: str) -> str:
     return parsed.geturl()
 
 
-def send_http_request(method: str, url: str, body: str) -> dict[str, Any]:
+def send_http_request(
+    method: str,
+    url: str,
+    body: str,
+    *,
+    allowed_private_targets: set[tuple[str, int]] | None = None,
+) -> dict[str, Any]:
     method = method.upper().strip()
     if method not in ALLOWED_METHODS:
         raise ValueError(f"method must be one of {sorted(ALLOWED_METHODS)}")
     if len(body.encode("utf-8")) > 64_000:
         raise ValueError("body must be no larger than 64,000 UTF-8 bytes")
-    target = _validate_public_url(url)
+    target = _validate_public_url(url, allowed_private_targets)
     data = None if method == "GET" else body.encode("utf-8")
     request = Request(
         target,

@@ -51,7 +51,8 @@ by this project.
 
 ## Prerequisites
 
-- Python 3.11 or newer
+- Python 3.12 or newer for the web/MCP service and full test suite
+- Python 3.11 or newer for the remote console client by itself
 - Git
 - The `mcp-envelope-harness` repository
 - The sibling `mcp-security-platform` repository, used to build the private
@@ -102,7 +103,6 @@ Verify the installation:
 ## Run locally
 
 ```bash
-cd ~/Code/mcp-envelope-harness
 .venv/bin/python -m manual_lab.app --host 127.0.0.1 --port 8900
 ```
 
@@ -110,14 +110,18 @@ Open <http://127.0.0.1:8900/>. The MCP endpoint is
 `http://127.0.0.1:8900/mcp/` and the health endpoint is
 `http://127.0.0.1:8900/api/health`.
 
-To expose the service on the Mac's private Tailscale address:
+To expose the unauthenticated lab on a trusted private interface, set the URL that the
+server should use for its own outbound health check and bind explicitly. Replace the
+example hostname with a DNS name or private address from your environment:
 
 ```bash
-.venv/bin/python -m manual_lab.app --host 100.119.138.35 --port 8900
+export MANUAL_LAB_SELF_URL=http://lab-host.example:8900
+.venv/bin/python -m manual_lab.app --host 0.0.0.0 --port 8900
 ```
 
-Then open <http://100.119.138.35:8900/> and connect MCP clients to
-`http://100.119.138.35:8900/mcp/`.
+Then open `$MANUAL_LAB_SELF_URL` and connect MCP clients to
+`$MANUAL_LAB_SELF_URL/mcp/`. Do not expose this unauthenticated service to the public
+Internet.
 
 ## Run with Podman or Docker
 
@@ -125,7 +129,6 @@ The verifier is private and not fetched from PyPI. Stage its wheel inside the ig
 `manual_lab/vendor/` build directory:
 
 ```bash
-cd ~/Code/mcp-envelope-harness
 mkdir -p manual_lab/vendor
 cp ../mcp-security-platform/sdk/mcp-trust-verifier/dist/mcp_trust_verifier-0.1.0-py3-none-any.whl \
   manual_lab/vendor/
@@ -167,12 +170,14 @@ Add to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.trust-envelope]
-url = "http://100.119.138.35:8900/mcp/"
+url = "http://127.0.0.1:8900/mcp/"
 enabled = true
 default_tools_approval_mode = "prompt"
 ```
 
 Restart Codex after changing the configuration.
+For a different host, replace `127.0.0.1` with the lab hostname configured in your
+environment.
 
 ### Claude Desktop over local stdio and SSH
 
@@ -185,15 +190,16 @@ a cloud-originated remote connector:
     "trust-envelope": {
       "command": "ssh",
       "args": [
-        "mi7t",
-        "cd ~/Code/mcp-envelope-harness && .venv/bin/python -m manual_lab.connector --stdio"
+        "lab-mac",
+        "cd /path/to/mcp-envelope-harness && .venv/bin/python -m manual_lab.connector --stdio"
       ]
     }
   }
 }
 ```
 
-The `mi7t` alias must work non-interactively. Restart Claude Desktop after editing
+Replace `lab-mac` and `/path/to/mcp-envelope-harness` with environment-appropriate
+values. The SSH target must work non-interactively. Restart Claude Desktop after editing
 `claude_desktop_config.json`.
 
 ## Interactive LLM + MCP console harness
@@ -203,14 +209,14 @@ OpenAI-compatible LLM, lets you add unauthenticated Streamable HTTP MCP servers 
 it is running, exposes their tools to the model, loads `SKILL.md` instructions, and
 prints the exact LLM and MCP requests and responses with ANSI color highlighting.
 
-The Mac currently runs llama.cpp at `http://127.0.0.1:11511/v1` with
-`qwen2.5-coder-3b-instruct-q4_k_m.gguf`. The defaults in `manual_lab/cli.py` match that
-service. Override them with command-line options or environment variables:
+The defaults assume an OpenAI-compatible model on loopback at
+`http://127.0.0.1:11511/v1` and the lab on `http://127.0.0.1:8900`. Override them with
+command-line options or environment variables:
 
 ```bash
 export MANUAL_LAB_LLM_URL=http://127.0.0.1:11511/v1
 export MANUAL_LAB_LLM_MODEL=qwen2.5-coder-3b-instruct-q4_k_m.gguf
-export MANUAL_LAB_URL=http://100.119.138.35:8900
+export MANUAL_LAB_URL=http://127.0.0.1:8900
 ```
 
 The console does not send authentication headers. `/mcp add` rejects credentials
@@ -222,21 +228,19 @@ trusted network.
 Start the web/MCP service in terminal 1:
 
 ```bash
-cd ~/Code/mcp-envelope-harness
-.venv/bin/python -m manual_lab.app --host 100.119.138.35 --port 8900
+.venv/bin/python -m manual_lab.app --host 127.0.0.1 --port 8900
 ```
 
 Confirm the local model and lab are reachable:
 
 ```bash
 curl --fail --silent http://127.0.0.1:11511/v1/models | python3 -m json.tool
-curl --fail --silent http://100.119.138.35:8900/api/health | python3 -m json.tool
+curl --fail --silent http://127.0.0.1:8900/api/health | python3 -m json.tool
 ```
 
 Start the interactive console in terminal 2:
 
 ```bash
-cd ~/Code/mcp-envelope-harness
 .venv/bin/python -m manual_lab.cli --color always
 ```
 
@@ -253,14 +257,13 @@ Expected evidence includes `LLM SEND chat/completions`, the complete JSON reques
 
 ### Run the console natively from Windows
 
-The llama.cpp server listens on Mac localhost only. Keep it private and forward it to
-Windows over the existing `mi7t` SSH connection. Do not rebind the model server to a
-public interface.
+If the model server listens on another host's loopback interface, keep it private and
+forward it to Windows over SSH. Do not rebind the model server to a public interface.
 
 On Windows PowerShell, install the client dependencies in a clone of this repository:
 
 ```powershell
-cd C:\Code\mcp-envelope-harness
+Set-Location C:\path\to\mcp-envelope-harness
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\.venv\Scripts\python.exe -m pip install -r manual_lab\requirements.runtime.txt
@@ -269,12 +272,14 @@ py -3 -m venv .venv
 The remote console client does not import `mcp_trust_verifier`; that private wheel is
 needed only when the web/MCP service or its full tests run on the same machine.
 
-Confirm that the SSH alias works without an interactive password prompt, then start the
-provided hidden tunnel:
+Set the environment-specific SSH host and lab URL. Confirm that SSH works without an
+interactive password prompt, then start the provided hidden tunnel:
 
 ```powershell
-ssh -o BatchMode=yes mi7t "echo connected"
-.\manual_lab\windows-llm-tunnel.ps1
+$env:MANUAL_LAB_SSH_HOST = "lab-mac"
+$env:MANUAL_LAB_URL = "http://lab-host.example:8900"
+ssh -o BatchMode=yes $env:MANUAL_LAB_SSH_HOST "echo connected"
+.\manual_lab\windows-llm-tunnel.ps1 -MacHost $env:MANUAL_LAB_SSH_HOST
 ```
 
 Expected output:
@@ -287,20 +292,22 @@ Verify both remote services from Windows:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:11511/v1/models
-Invoke-RestMethod http://100.119.138.35:8900/api/health
+Invoke-RestMethod "$env:MANUAL_LAB_URL/api/health"
 ```
 
 Run the same console natively under Windows Python:
 
 ```powershell
-.\.venv\Scripts\python.exe -m manual_lab.cli --color always
+.\.venv\Scripts\python.exe -m manual_lab.cli `
+  --lab-url $env:MANUAL_LAB_URL `
+  --color always
 ```
 
-The console defaults remain correct: the LLM is available through the local SSH tunnel
-at `127.0.0.1:11511`, while MCP is added using the Mac's Tailscale address:
+The LLM is available through the local SSH tunnel at `127.0.0.1:11511`. Add MCP using
+the private lab URL for your environment (replace the placeholder before entering it):
 
 ```text
-/mcp add http://100.119.138.35:8900/mcp/ lab
+/mcp add <LAB_BASE_URL>/mcp/ lab
 /skill use lab-command-runner
 /status
 ```
@@ -310,7 +317,7 @@ on macOS. It never uses `cmd.exe`, PowerShell, `/bin/sh`, or another shell. Stop
 tunnel when finished:
 
 ```powershell
-.\manual_lab\windows-llm-tunnel.ps1 -Stop
+.\manual_lab\windows-llm-tunnel.ps1 -MacHost $env:MANUAL_LAB_SSH_HOST -Stop
 ```
 
 ### Add an unauthenticated MCP server at runtime
@@ -318,7 +325,7 @@ tunnel when finished:
 In the same console session:
 
 ```text
-/mcp add http://100.119.138.35:8900/mcp/ lab
+/mcp add http://127.0.0.1:8900/mcp/ lab
 /mcp list
 /mcp tools
 Call the inspect_envelope_lab_state tool and summarize the published state.
@@ -343,10 +350,12 @@ With `/trace full`—the default—each label is followed by the full JSON paylo
 You can also configure everything non-interactively:
 
 ```bash
+LAB_BASE_URL="${MANUAL_LAB_URL:-http://127.0.0.1:8900}"
 .venv/bin/python -m manual_lab.cli \
   --llm-url http://127.0.0.1:11511/v1 \
   --model qwen2.5-coder-3b-instruct-q4_k_m.gguf \
-  --mcp http://100.119.138.35:8900/mcp/ \
+  --lab-url "$LAB_BASE_URL" \
+  --mcp "$LAB_BASE_URL/mcp/" \
   --color always \
   --ask 'Call inspect_envelope_lab_state and summarize it.'
 ```
@@ -391,7 +400,7 @@ and refuses file-reading, shell, and network-capable commands.
 First activate the skill, connect MCP, and publish the vulnerable preset:
 
 ```text
-/mcp add http://100.119.138.35:8900/mcp/ lab
+/mcp add http://127.0.0.1:8900/mcp/ lab
 /skill use lab-command-runner
 /lab publish malicious_no_envelope_unprotected
 ```

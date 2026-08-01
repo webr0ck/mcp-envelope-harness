@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import os
 import secrets
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
@@ -28,6 +30,16 @@ ROOT = Path(__file__).resolve().parent.parent
 INDEX = Path(__file__).resolve().parent / "index.html"
 EVIDENCE = ROOT / ".run" / "manual_lab"
 HTTP_LOG = EVIDENCE / "outbound.jsonl"
+SELF_URL = os.environ.get("MANUAL_LAB_SELF_URL", "http://127.0.0.1:8900").rstrip("/")
+_self_url = urlsplit(SELF_URL)
+if _self_url.scheme not in {"http", "https"} or not _self_url.hostname:
+    raise RuntimeError("MANUAL_LAB_SELF_URL must be an absolute http:// or https:// URL")
+SELF_TARGET = {
+    (
+        _self_url.hostname,
+        _self_url.port or (443 if _self_url.scheme == "https" else 80),
+    )
+}
 
 lab = ManualEnvelopeLab(EVIDENCE)
 mcp_server = build_server(lab)
@@ -117,6 +129,7 @@ def health() -> dict[str, Any]:
         "evidence_dir": str(EVIDENCE),
         "anchor": str(lab.anchor_path),
         "mcp_streamable_http": "/mcp/",
+        "self_test_url": f"{SELF_URL}/api/health",
     }
 
 
@@ -132,7 +145,12 @@ def http_request(request: HttpRequest) -> dict[str, Any]:
     if request.method.upper() not in ALLOWED_METHODS:
         raise HTTPException(status_code=422, detail="unsupported HTTP method")
     try:
-        result = send_http_request(request.method, request.url, request.body)
+        result = send_http_request(
+            request.method,
+            request.url,
+            request.body,
+            allowed_private_targets=SELF_TARGET,
+        )
     except ValueError as exc:
         append_http_log(
             HTTP_LOG,

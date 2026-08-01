@@ -158,10 +158,17 @@ def test_outbound_validator_rejects_private_and_credentialed_urls(monkeypatch):
         raise AssertionError("credentialed URL was accepted")
 
 
-def test_outbound_validator_allows_the_lab_health_endpoint():
+def test_outbound_validator_allows_a_configured_private_health_endpoint(monkeypatch):
+    monkeypatch.setattr(
+        "manual_lab.outbound.socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("10.20.30.40", 8900))],
+    )
     assert (
-        _validate_public_url("http://100.119.138.35:8900/api/health")
-        == "http://100.119.138.35:8900/api/health"
+        _validate_public_url(
+            "http://lab.internal:8900/api/health",
+            {("lab.internal", 8900)},
+        )
+        == "http://lab.internal:8900/api/health"
     )
 
 
