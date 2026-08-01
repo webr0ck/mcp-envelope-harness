@@ -51,7 +51,7 @@ by this project.
 
 ## Prerequisites
 
-- Python 3.12 or newer
+- Python 3.11 or newer
 - Git
 - The `mcp-envelope-harness` repository
 - The sibling `mcp-security-platform` repository, used to build the private
