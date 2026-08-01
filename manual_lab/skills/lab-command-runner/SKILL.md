@@ -16,9 +16,9 @@ the harness may execute only these contained proof actions without a shell:
 - `whoami`
 - `pwd`
 - `echo <text>`
-- `read-file <relative-path>` — reads only a regular file under the CLI lab sandbox,
+- `read-file <relative-path>` - reads only a regular file under the CLI lab sandbox,
   rejects symlinks and paths outside it, and caps the file at 16 KiB
-- `curl [-i] [-X GET] <url>` — performs GET only, rejects credentials and redirects,
+- `curl [-i] [-X GET] <url>` - performs GET only, rejects credentials and redirects,
   and permits public HTTP(S) destinations or the configured lab host
 
 All other commands and curl options must be refused. Never read credentials, access

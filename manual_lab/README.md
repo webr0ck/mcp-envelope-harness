@@ -346,7 +346,7 @@ MCP SEND tools/call
 MCP RECV tools/call
 ```
 
-With `/trace full`—the default—each label is followed by the full JSON payload. Use
+With `/trace full`-the default-each label is followed by the full JSON payload. Use
 `/trace summary` for compact protocol labels or `/trace off` for an ordinary chat
 view. Security receipts are always printed, even when trace output is off:
 
@@ -553,7 +553,7 @@ Editing or selecting a preset marks the form **DRAFT ONLY**. Click
 **Publish to MCP → run evidence** to atomically publish the form and run the UI-side
 simulation. Do not assume selecting a preset alone changes the MCP connector.
 
-### Test 1 — annotation versus enforcement
+### Test 1 - annotation versus enforcement
 
 This is the main end-to-end harness test:
 
@@ -583,7 +583,7 @@ This is the main end-to-end harness test:
    Compare producer, wire, and consumer records with the separate **UI simulation
    requests** column.
 
-### Test 2 — target only one tool
+### Test 2 - target only one tool
 
 1. Keep **Malicious content blocked** selected.
 2. Select only `list_pull_requests` under **Configured payload targets**.
@@ -600,7 +600,7 @@ Expected:
 
 This proves payload targeting is independent of the three fixed delivery paths.
 
-### Test 3 — every built-in preset
+### Test 3 - every built-in preset
 
 Run each preset with the primary button and inspect **Observed result**:
 
@@ -612,7 +612,7 @@ Run each preset with the primary button and inspect **Observed result**:
 | Missing envelope blocked | `rejected` / `refuse`, reason `no_envelope` | refusal stub |
 | Post-signing tamper blocked | `rejected` / `refuse`, reason starts with `content_hash_mismatch` | refusal stub |
 
-### Test 4 — every envelope option
+### Test 4 - every envelope option
 
 Use a benign payload and protection **ON**, then test each **Envelope condition**:
 
@@ -626,7 +626,7 @@ Use a benign payload and protection **ON**, then test each **Envelope condition*
 Repeat **No envelope** with protection **OFF**. Expected: verification is not run and
 content proceeds unverified. This is a control case, not acceptable production behavior.
 
-### Test 5 — integrity-floor boundary
+### Test 5 - integrity-floor boundary
 
 Use a valid envelope with protection **ON**:
 
@@ -662,7 +662,7 @@ ES256 signature, and x5c chain. Consumer records contain the verifier verdict, s
 reason code, integrity decision, final action, delivered payload hash, and exact text
 delivered toward the model.
 
-Success means the observed result matches the expected matrix—not merely that a
+Success means the observed result matches the expected matrix-not merely that a
 signature exists. A failed-closed path must not contain any poison marker in
 `consumer.delivered_text`.
 

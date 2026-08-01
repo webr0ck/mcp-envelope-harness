@@ -31,10 +31,10 @@ python -m federation.run_demo
 Expected output contains five `PASS` lines. Generated evidence is written under
 `.run/federation/`:
 
-- `evidence.json` — decisions, side effects, and acceptance results;
-- `relay.jsonl` — Org A→relay and relay→Org B wire bodies;
-- `org_a/public/labeler_ca.pem` — the public trust anchor Org A publishes;
-- `org_b/trust/org_a_labeler_ca.pem` — Org B's out-of-band pinned copy.
+- `evidence.json` - decisions, side effects, and acceptance results;
+- `relay.jsonl` - Org A→relay and relay→Org B wire bodies;
+- `org_a/public/labeler_ca.pem` - the public trust anchor Org A publishes;
+- `org_b/trust/org_a_labeler_ca.pem` - Org B's out-of-band pinned copy.
 
 The local command uses three separate processes and real HTTP sockets for a reproducible
 test. No producer key or shared database enters Org B. Only the public CA anchor crosses
@@ -85,13 +85,13 @@ Restrict these unauthenticated lab listeners with host firewall or private netwo
 
 The specifications are published at
 [github.com/webr0ck/security-specs](https://github.com/webr0ck/security-specs). They are
-**not** IETF RFCs and are not on any standards track — they are working design
+**not** IETF RFCs and are not on any standards track - they are working design
 specifications, and citations to them should not be quoted as an external standard.
 
 - [SPEC-0001](https://github.com/webr0ck/security-specs/blob/main/specs/0001-mcp-signed-trust-envelope.md)
-  — the signed envelope. Implemented, and what this demo exercises.
+  - the signed envelope. Implemented, and what this demo exercises.
 - [SPEC-0002 §6](https://github.com/webr0ck/security-specs/blob/main/specs/0002-mcp-content-classification-federated-trust-ai-provenance.md)
-  — federated trust. Specified, **not** implemented.
+  - federated trust. Specified, **not** implemented.
 
 This demonstration proves the substrate that §6 is built on: an authenticated per-result
 label can survive an administrative boundary and an untrusted relay. It is not a
