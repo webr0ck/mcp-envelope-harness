@@ -15,6 +15,7 @@
       --purple: #7b5ea7;
       --purple-dark: #5d4a87;
       --purple-soft: #f2eef9;
+      --purple-line: #cfc2e2;
       --green: #246345;
       --green-soft: #edf6f0;
       --red: #922f3e;
@@ -124,6 +125,13 @@
     .outcome--block { border-color: #dca5ae; background: var(--red-soft); color: var(--red); }
     .outcome--vulnerable { border-color: #e7c28e; background: var(--amber-soft); color: var(--amber); }
     .run-id { font: .67rem var(--mono); opacity: .82; }
+    .evidence-receipt { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; margin: 0 1rem 1rem; }
+    .receipt-item { min-width: 0; padding: .65rem .75rem; border: 1px solid var(--line); background: #fbfaf8; }
+    .receipt-item span { display: block; color: var(--muted); font: 700 .6rem var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+    .receipt-item strong { display: block; margin-top: .2rem; font: 750 .72rem/1.4 var(--mono); overflow-wrap: anywhere; }
+    .stale-result { margin: 1rem; padding: 1rem; border: 2px solid var(--amber); background: var(--amber-soft); color: var(--amber); }
+    .stale-result h2 { margin: 0; font-size: 1.25rem; }
+    .stale-result p { margin: .4rem 0 0; color: var(--ink); font-size: .78rem; }
 
     .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin: 1rem; background: var(--line); border: 1px solid var(--line); }
     .side { min-width: 0; padding: 1rem; background: var(--card); }
@@ -268,7 +276,7 @@
       header.hero { grid-template-columns: 1fr; gap: 1.3rem; padding-top: 2.5rem; }
       .presets { grid-template-columns: 1fr; }
       .preset { min-height: 0; }
-      .grid-2, .flow, .utility-grid { grid-template-columns: 1fr; }
+      .grid-2, .flow, .utility-grid, .evidence-receipt { grid-template-columns: 1fr; }
       .log-row summary { grid-template-columns: 1fr auto; gap: .25rem .7rem; }
       .log-row summary::after { grid-column: 2; grid-row: 1 / span 4; }
       .logs-head { align-items: start; flex-direction: column; }
@@ -311,7 +319,7 @@
             <div class="field">
               <label for="content">Tool response text</label>
               <textarea id="content" name="content" required maxlength="20000"></textarea>
-              <small>Edit this freely. It is treated as untrusted data, never HTML.</small>
+              <small>Edit this freely. It is treated as untrusted data, never HTML. Changing it invalidates and hides the previous result.</small>
             </div>
             <div class="grid-2">
               <div class="field">
@@ -348,8 +356,8 @@
               <div class="field">
                 <label for="protection">Consumer protection</label>
                 <select id="protection" name="protection">
-                  <option value="enforce">ON · verify and enforce</option>
-                  <option value="off">OFF · vulnerable control</option>
+                  <option value="enforce">ON · enforce</option>
+                  <option value="off">OFF · bypass</option>
                 </select>
               </div>
             </div>
@@ -367,6 +375,7 @@
               </div>
             </fieldset>
           <button class="run" id="run" type="submit">Publish to MCP → run evidence</button>
+          <p class="utility-note">This UI proves signing, verification, and delivery. URL/file side effects are demonstrated separately by the Windows CLI after MCP delivery.</p>
           <div class="connector-box">
             <h3>MCP published state</h3>
             <p>The form is a draft until the primary action publishes and runs it.</p>
@@ -473,13 +482,13 @@
               <td data-label="Tool">read_news</td>
               <td data-label="Envelope annotation">Missing</td>
               <td data-label="Enforcement">Off</td>
-              <td data-label="Expected result">Malicious text reaches Claude</td>
+              <td data-label="Expected result">Malicious text reaches the model</td>
             </tr>
             <tr>
               <td data-label="Tool">list_pull_requests</td>
               <td data-label="Envelope annotation">Present in <code>_meta</code></td>
               <td data-label="Enforcement">Off</td>
-              <td data-label="Expected result">Malicious text still reaches Claude</td>
+              <td data-label="Expected result">Malicious text still reaches the model</td>
             </tr>
             <tr>
               <td data-label="Tool">get_last_jira_ticket</td>
@@ -540,7 +549,7 @@
 
       <section class="logs" aria-labelledby="logs-title">
         <div class="logs-head">
-          <div><p class="section-label">Correlated evidence</p><h2 id="logs-title">Recent consumer decisions</h2></div>
+          <div><p class="section-label">Historical records · independent of the current editor</p><h2 id="logs-title">Recent consumer decisions</h2></div>
           <button class="refresh" id="refresh" type="button">Refresh log</button>
         </div>
         <div class="log-groups">
@@ -565,6 +574,7 @@
     const $ = id => document.getElementById(id);
     let scenarios = {};
     let publishedConfig = null;
+    let renderedResult = null;
     const connectorToolNames = ["read_news", "list_pull_requests", "get_last_jira_ticket"];
 
     function badge(text, kind) {
@@ -611,27 +621,11 @@
       });
     }
 
-    function outcomeFor(c) {
-      if (c.action === "proceed_unverified") {
-        return {
-          cls: "vulnerable",
-          title: "VULNERABLE — malicious content reached the consumer",
-          detail: "Protection was OFF, so the missing envelope was never checked."
-        };
-      }
-      if (c.action === "proceed") {
-        return {
-          cls: "pass",
-          title: "ALLOWED — signed result satisfied policy",
-          detail: `Verified integrity ${c.integrity_rank} met required integrity ${c.required_integrity}.`
-        };
-      }
+    function outcomeFor(decision) {
       return {
-        cls: "block",
-        title: "BLOCKED — original content was withheld",
-        detail: c.reason
-          ? `Decision reason: ${c.reason}`
-          : `Session floor ${c.session_floor} was below required integrity ${c.required_integrity}.`
+        cls: decision.outcome === "allowed" ? "pass" : (decision.outcome === "bypassed" ? "vulnerable" : "block"),
+        title: decision.headline,
+        detail: decision.explanation
       };
     }
 
@@ -640,18 +634,25 @@
     }
 
     function renderResult(data) {
-      const p = data.producer, w = data.wire, c = data.consumer;
-      const outcome = outcomeFor(c);
+      const p = data.producer, w = data.wire, c = data.consumer, d = data.decision, s = data.submission;
+      const outcome = outcomeFor(d);
       const producerEnv = p.envelope.present ? `present · rank ${p.envelope.integrity_rank}` : "missing";
       const wireEnv = w.envelope.present ? `present · ${w.envelope.algorithm}` : "missing";
       const verdictKind = c.verdict === "accepted" ? "ok" : (c.verdict === "not_run" ? "warn" : "no");
       const actionKind = c.action === "proceed" ? "ok" : (c.action === "proceed_unverified" ? "warn" : "no");
+      renderedResult = {runId: data.run_id, config: data.config, payloadId: s.payload.id};
 
       $("result").innerHTML = `
         <div class="outcome outcome--${outcome.cls}">
           <div class="run-id">${escapeHtml(data.run_id)}</div>
           <h2>${escapeHtml(outcome.title)}</h2>
           <p>${escapeHtml(outcome.detail)}</p>
+        </div>
+        <div class="evidence-receipt" aria-label="Result identity">
+          <div class="receipt-item"><span>Evaluated payload</span><strong>${escapeHtml(s.payload.id)} · ${s.payload.utf8_bytes} UTF-8 bytes</strong></div>
+          <div class="receipt-item"><span>Configuration receipt</span><strong>${escapeHtml(s.id)}</strong></div>
+          <div class="receipt-item"><span>Decision reason</span><strong>${escapeHtml(d.reason_code)}</strong></div>
+          <div class="receipt-item"><span>Editor relationship</span><strong>EXACT MATCH AT SUBMISSION</strong></div>
         </div>
         <div class="flow">
           <article class="side">
@@ -684,16 +685,17 @@
               <div><dt>Verdict</dt><dd>${badge(c.verdict, verdictKind)}</dd></div>
               ${fact("Reason", c.reason || "—")}
               <div><dt>Action</dt><dd>${badge(c.action, actionKind)}</dd></div>
-              ${fact("Poison delivered", c.poison_delivered ? "YES" : "no")}
+              ${fact("Payload delivered", c.content_withheld ? "NO — WITHHELD" : "YES")}
+              ${fact("Fixture poison markers", c.poison_delivered ? "detected" : "not detected")}
             </dl>
             <details><summary>Consumer record</summary><pre>${escapeHtml(JSON.stringify(c, null, 2))}</pre></details>
           </article>
         </div>
         <div class="delivered">
-          <b>Exact text delivered toward the model</b>
+          <b>Exact text delivered toward the model · ${escapeHtml(c.delivered_payload.id)}</b>
           <code>${escapeHtml(c.delivered_text)}</code>
         </div>
-        <p class="explain">A valid signature does not identify malicious semantics. It authenticates the label and exact bytes. The low-integrity malicious preset is blocked because rank 0 cannot drive an operation requiring rank 1.</p>`;
+        <p class="explain"><strong>Side effect:</strong> not attempted by this UI simulation. Use the CLI to prove whether a delivered <code>&lt;c&gt;BASE64&lt;/c&gt;</code> or <code>LAB_ATTACK_COMMAND</code> marker is blocked or executed on the client host.</p>`;
     }
 
     function renderLogList(list, rows, producers, wires, emptyMessage) {
@@ -713,7 +715,7 @@
         const when = new Date(row.ts * 1000).toLocaleString();
         details.innerHTML = `
           <summary aria-label="Open complete evidence for ${escapeHtml(row.run_id)}">
-            <span><span class="log-origin">${escapeHtml(row.origin || "legacy")}</span><code>${escapeHtml(when)}</code></span>
+            <span><span class="log-origin">${escapeHtml(row.origin || "legacy")}</span><code>${escapeHtml(when)}</code><br><code>${escapeHtml(row.submitted_payload?.id || "legacy · no payload ID")}</code></span>
             <code>${escapeHtml(row.verdict)}</code>
             <span>${escapeHtml(row.reason || "accepted")}</span>
             <code>${escapeHtml(row.action)}</code>
@@ -779,6 +781,20 @@
       } else {
         status.textContent = `DRAFT ONLY · MCP still uses rank ${publishedConfig.trust_tier} · targets: ${publishedConfig.target_tools.join(", ") || "none"}`;
       }
+      invalidateStaleResult();
+    }
+
+    function invalidateStaleResult() {
+      if (!renderedResult) return;
+      const stillMatches = JSON.stringify(comparableConfig(formBody())) === JSON.stringify(comparableConfig(renderedResult.config));
+      if (stillMatches) return;
+      const previous = renderedResult;
+      renderedResult = null;
+      $("result").innerHTML = `
+        <div class="stale-result" role="status">
+          <h2>Previous result hidden — editor changed</h2>
+          <p>Run <code>${escapeHtml(previous.runId)}</code> evaluated <code>${escapeHtml(previous.payloadId)}</code>, not the draft now in the form. Click <strong>Publish to MCP → run evidence</strong> to create a result bound to this draft.</p>
+        </div>`;
     }
 
     $("lab-form").addEventListener("submit", async event => {

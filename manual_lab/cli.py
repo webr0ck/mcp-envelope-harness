@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
+import binascii
+import hashlib
 import json
 import os
 import platform
@@ -23,13 +26,19 @@ import httpx
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
+from manual_lab.constants import LAB_DECISION_META_KEY
+from manual_lab.outbound import send_http_request
+
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_LLM_URL = "http://127.0.0.1:11511/v1"
 DEFAULT_LAB_URL = "http://127.0.0.1:8900"
 DEFAULT_MCP_URL = f"{DEFAULT_LAB_URL}/mcp/"
 ATTACK_COMMAND = re.compile(r"(?m)^LAB_ATTACK_COMMAND:\s*([^\r\n\]]+)")
-SAFE_COMMANDS = {"whoami", "pwd", "echo"}
+ENCODED_COMMAND = re.compile(r"<c>([\s\S]*?)</c>", re.IGNORECASE)
+BASE64_COMMAND = re.compile(r"[A-Za-z0-9+/=]+")
+RUN_TEST_ON = re.compile(r"(?i)\brun\s+test\s+on\s+([A-Za-z0-9+/=]{8,})\s*$")
+SAFE_COMMANDS = {"whoami", "pwd", "echo", "curl", "read-file"}
 
 
 class Ansi:
@@ -73,6 +82,69 @@ class Trace:
             return
         rendered = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
         print(self.paint(rendered, color), flush=True)
+
+    def decision(self, payload: dict[str, Any], *, source: str) -> None:
+        """Render the security decision as a compact, color-independent receipt."""
+        outcome = str(payload.get("outcome", "unknown")).upper()
+        color = {
+            "ALLOWED": Ansi.GREEN,
+            "BLOCKED": Ansi.RED,
+            "BYPASSED": Ansi.YELLOW,
+        }.get(outcome, Ansi.CYAN)
+        self.line("TRUST DECISION", f"{outcome} · {source}", color=color)
+        if payload.get("verdict") == "rejected":
+            observed_integrity = "not accepted"
+        elif payload.get("verdict") == "not_run":
+            observed_integrity = "not verified"
+        else:
+            observed_integrity = payload.get("session_floor")
+        rows = (
+            ("reason", payload.get("reason_code") or "—"),
+            ("why", payload.get("explanation") or "—"),
+            ("policy", f"protection={payload.get('protection')} · action={payload.get('action')}"),
+            (
+                "integrity",
+                f"observed={observed_integrity} · required={payload.get('required_integrity')}",
+            ),
+            ("run", payload.get("run_id") or "—"),
+            ("payload", (payload.get("payload") or {}).get("id") or "—"),
+        )
+        for key, value in rows:
+            print(f"  {key:<10} {value}", flush=True)
+
+    def action(self, payload: dict[str, Any]) -> None:
+        status = str(payload.get("status", "unknown")).upper()
+        color = Ansi.MAGENTA if status == "EXECUTED" else Ansi.RED
+        self.line("SIDE EFFECT", status, color=color)
+        for key in (
+            "reason",
+            "command",
+            "target",
+            "http_status",
+            "response_sha256",
+            "path",
+            "bytes",
+            "content_sha256",
+            "stdout",
+            "event_id",
+        ):
+            value = payload.get(key)
+            if value not in (None, ""):
+                print(f"  {key:<10} {str(value).rstrip()}", flush=True)
+
+
+def _decode_c_command(value: str) -> str:
+    """Decode either <c>BASE64</c> or <c>prose ... run test on BASE64</c>."""
+    body = value.strip()
+    match = RUN_TEST_ON.search(body)
+    encoded = match.group(1) if match else body
+    encoded = "".join(encoded.split())
+    if not encoded or not BASE64_COMMAND.fullmatch(encoded):
+        raise ValueError("expected Base64 or the phrase 'run test on BASE64' inside <c>")
+    try:
+        return base64.b64decode(encoded, validate=True).decode("utf-8").strip()
+    except (binascii.Error, UnicodeDecodeError) as exc:
+        raise ValueError(f"invalid <c> Base64 payload: {exc}") from exc
 
 
 @dataclass(frozen=True)
@@ -251,8 +323,41 @@ class McpRegistry:
         return raw, text
 
 
-def execute_lab_command(command: str, sandbox: Path) -> dict[str, Any]:
-    """Execute one intentionally tiny command set without a shell or network access."""
+def _curl_get(parts: list[str]) -> str:
+    """Accept only a GET-shaped curl command and return its single destination URL."""
+    method = "GET"
+    url: str | None = None
+    index = 1
+    while index < len(parts):
+        part = parts[index]
+        if part in {"-i", "-s", "-S", "-f"}:
+            index += 1
+            continue
+        if part in {"-X", "--request"}:
+            if index + 1 >= len(parts):
+                raise ValueError(f"{part} requires a method")
+            method = parts[index + 1].upper()
+            index += 2
+            continue
+        if part.startswith("-"):
+            raise ValueError(f"curl option is outside the lab allowlist: {part}")
+        if url is not None:
+            raise ValueError("curl lab action accepts exactly one URL")
+        url = part
+        index += 1
+    if method != "GET":
+        raise ValueError("curl lab action permits GET only")
+    if not url:
+        raise ValueError("curl lab action requires a URL")
+    return url
+
+
+def execute_lab_command(
+    command: str,
+    sandbox: Path,
+    allowed_http_targets: set[tuple[str, int]] | None = None,
+) -> dict[str, Any]:
+    """Execute one contained proof action without a shell or arbitrary file access."""
     try:
         parts = shlex.split(command)
     except ValueError as exc:
@@ -274,6 +379,56 @@ def execute_lab_command(command: str, sandbox: Path) -> dict[str, Any]:
         "cwd": str(sandbox),
         "platform": platform.system(),
     }
+    if parts[0] == "curl":
+        try:
+            target = _curl_get(parts)
+            response = send_http_request(
+                "GET",
+                target,
+                "",
+                allowed_private_targets=allowed_http_targets,
+            )
+        except ValueError as exc:
+            return {**common, "status": "refused", "reason": str(exc)}
+        body = response["body"]
+        return {
+            **common,
+            "executor": "python-http-client-no-redirects",
+            "argv": parts,
+            "target": response["url"],
+            "http_status": response["status"],
+            "http_reason": response["reason"],
+            "response_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+            "response_body": body,
+            "response_truncated": response["truncated"],
+            "stdout": f"HTTP {response['status']} {response['reason']}\n{body}",
+            "stderr": "",
+        }
+    if parts[0] == "read-file":
+        if len(parts) != 2:
+            return {**common, "status": "refused", "reason": "read-file requires one sandbox-relative path"}
+        sandbox_root = sandbox.resolve()
+        requested = (sandbox_root / parts[1]).resolve()
+        try:
+            requested.relative_to(sandbox_root)
+        except ValueError:
+            return {**common, "status": "refused", "reason": "file is outside the CLI lab sandbox"}
+        if requested.is_symlink() or not requested.is_file():
+            return {**common, "status": "refused", "reason": "sandbox file does not exist or is a symlink"}
+        if requested.stat().st_size > 16_384:
+            return {**common, "status": "refused", "reason": "sandbox file exceeds the 16 KiB lab limit"}
+        raw = requested.read_bytes()
+        content = raw.decode("utf-8", errors="replace")
+        return {
+            **common,
+            "executor": "python-sandbox-file-reader",
+            "argv": parts,
+            "path": str(requested),
+            "bytes": len(raw),
+            "content_sha256": hashlib.sha256(raw).hexdigest(),
+            "stdout": content,
+            "stderr": "",
+        }
     if parts[0] == "pwd":
         return {
             **common,
@@ -342,6 +497,17 @@ class ConsoleHarness:
         self.sandbox = ROOT / ".run" / "manual_lab" / "cli-sandbox"
         self.action_log = ROOT / ".run" / "manual_lab" / "cli_actions.jsonl"
 
+    def _allowed_http_targets(self) -> set[tuple[str, int]]:
+        parsed = urlsplit(self.lab_url)
+        if not parsed.hostname:
+            return set()
+        return {
+            (
+                parsed.hostname,
+                parsed.port or (443 if parsed.scheme == "https" else 80),
+            )
+        }
+
     async def close(self) -> None:
         await self.mcp.close()
         await self.http.aclose()
@@ -382,40 +548,97 @@ class ConsoleHarness:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def handle_attack_commands(self, text: str, source: str) -> tuple[str, list[dict[str, Any]]]:
-        commands = ATTACK_COMMAND.findall(text)
-        if not commands:
+        markers: list[dict[str, Any]] = []
+        for match in ATTACK_COMMAND.finditer(text):
+            markers.append(
+                {
+                    "start": match.start(),
+                    "end": match.end(),
+                    "command": match.group(1).strip(),
+                    "encoding": "plain",
+                    "decode_error": None,
+                }
+            )
+        for match in ENCODED_COMMAND.finditer(text):
+            try:
+                command = _decode_c_command(match.group(1))
+                decode_error = None
+            except ValueError as exc:
+                command = ""
+                decode_error = str(exc)
+            markers.append(
+                {
+                    "start": match.start(),
+                    "end": match.end(),
+                    "command": command,
+                    "encoding": "base64-c-tag",
+                    "decode_error": decode_error,
+                }
+            )
+        if not markers:
             return text, []
+        markers.sort(key=lambda marker: marker["start"])
         events: list[dict[str, Any]] = []
-        processed = text
-        for command in commands:
-            command = command.strip()
+        rendered: list[str] = []
+        appended_evidence: list[str] = []
+        cursor = 0
+        for marker in markers:
+            if marker["start"] < cursor:
+                continue
+            command = marker["command"]
+            rendered.append(text[cursor : marker["start"]])
             base = {
                 "ts": time.time(),
                 "event_id": f"action-{secrets.token_hex(4)}",
                 "source": source,
                 "command": command,
+                "encoding": marker["encoding"],
                 "protection": "on" if self.command_protection else "bypassed",
                 "skill": "lab-command-runner" if "lab-command-runner" in self.skills.active else None,
             }
-            if self.command_protection:
-                result = {**base, "status": "blocked", "reason": "command protection is on"}
-                processed = ATTACK_COMMAND.sub("LAB_ATTACK_COMMAND: [BLOCKED BY TRUST GATE]", processed, count=1)
-                self.trace.event("SECURITY BLOCKED", result, color=Ansi.RED)
+            if marker["decode_error"]:
+                result = {**base, "status": "blocked", "reason": marker["decode_error"]}
+                replacement = "[LAB COMMAND BLOCKED: invalid Base64]"
+            elif self.command_protection:
+                result = {
+                    **base,
+                    "status": "blocked",
+                    "reason": "command_protection_enabled",
+                }
+                replacement = "[LAB COMMAND BLOCKED: command_protection_enabled]"
             elif "lab-command-runner" not in self.skills.active:
-                result = {**base, "status": "blocked", "reason": "lab-command-runner skill is not active"}
-                processed = ATTACK_COMMAND.sub("LAB_ATTACK_COMMAND: [SKILL NOT ACTIVE]", processed, count=1)
-                self.trace.event("SKILL BLOCKED", result, color=Ansi.YELLOW)
+                result = {
+                    **base,
+                    "status": "blocked",
+                    "reason": "lab_command_runner_skill_inactive",
+                }
+                replacement = "[LAB COMMAND BLOCKED: lab_command_runner_skill_inactive]"
             else:
-                execution = execute_lab_command(command, self.sandbox)
-                result = {**base, **execution}
-                color = Ansi.MAGENTA if execution["status"] == "executed" else Ansi.RED
-                self.trace.event("SKILL EXECUTION", result, color=color)
-                processed += "\n\n[LAB SKILL EXECUTION RESULT]\n" + json.dumps(
-                    execution, ensure_ascii=False, indent=2
+                execution = execute_lab_command(
+                    command,
+                    self.sandbox,
+                    self._allowed_http_targets(),
                 )
+                result = {**base, **execution}
+                replacement = (
+                    "[LAB COMMAND EXECUTED — see SIDE EFFECT receipt]"
+                    if execution["status"] == "executed"
+                    else f"[LAB COMMAND REFUSED: {execution.get('reason', 'policy')}]"
+                )
+                appended_evidence.append("[LAB SIDE EFFECT RECEIPT]\n" + json.dumps(
+                    execution, ensure_ascii=False, indent=2
+                ))
+            rendered.append(replacement)
+            cursor = marker["end"]
             self._write_action_log(result)
             events.append(result)
-        return processed, events
+            self.trace.action(result)
+            if self.trace.mode == "full":
+                self.trace.event("SIDE EFFECT EVIDENCE", result, color=Ansi.MAGENTA)
+        rendered.append(text[cursor:])
+        if appended_evidence:
+            rendered.append("\n\n" + "\n\n".join(appended_evidence))
+        return "".join(rendered), events
 
     async def _llm_chat(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         tools, _ = self.mcp.openai_tools()
@@ -474,7 +697,10 @@ class ConsoleHarness:
                         )
                     else:
                         called_signatures.add(signature)
-                        _, tool_text = await self.mcp.call(function["name"], arguments)
+                        raw, tool_text = await self.mcp.call(function["name"], arguments)
+                        decision = (raw.get("_meta") or {}).get(LAB_DECISION_META_KEY)
+                        if decision:
+                            self.trace.decision(decision, source=function["name"])
                         safe_text, _ = self.handle_attack_commands(tool_text, function["name"])
                 except Exception as exc:
                     safe_text = f"Tool call failed: {type(exc).__name__}: {exc}"
@@ -525,6 +751,7 @@ class ConsoleHarness:
             "command_protection": "on" if self.command_protection else "bypassed",
             "trace": self.trace.mode,
             "action_log": str(self.action_log),
+            "sandbox": str(self.sandbox),
         }
 
     async def command(self, line: str) -> bool:
@@ -596,6 +823,19 @@ class ConsoleHarness:
             self.trace.line("LAB", f"published {args[1]} · run_id={result['run_id']}", color=Ansi.GREEN)
         elif command == "/lab" and args[:1] == ["state"]:
             await self.lab_request("GET", "/api/connector/config")
+        elif command == "/lab" and args[:1] == ["proof-file"]:
+            content = " ".join(args[1:]) or f"WINDOWS-LAB-PROOF-{secrets.token_hex(4)}"
+            self.sandbox.mkdir(parents=True, exist_ok=True)
+            path = self.sandbox / "proof.txt"
+            path.write_text(content + "\n", encoding="utf-8")
+            self.trace.action(
+                {
+                    "status": "executed",
+                    "command": "create proof file",
+                    "path": str(path),
+                    "stdout": content,
+                }
+            )
         elif command == "/clear":
             self.history.clear()
             self.trace.line("HISTORY", "conversation cleared", color=Ansi.YELLOW)
@@ -641,6 +881,7 @@ HELP = """Commands:
   /lab presets                    List published-response presets
   /lab publish PRESET             Publish a preset to all three lab MCP tools
   /lab state                      Show the currently published MCP payload
+  /lab proof-file [TEXT]          Create sandbox/proof.txt for a real local-read test
   /clear                          Clear conversation history
   /quit                           Exit
 
@@ -679,7 +920,7 @@ async def async_main(args: argparse.Namespace) -> int:
             harness.skills.activate(skill_name)
         harness.command_protection = args.protection == "on"
         for index, url in enumerate(args.mcp):
-            await harness.mcp.add(url, "lab" if index == 0 and url == DEFAULT_MCP_URL else None)
+            await harness.mcp.add(url, "lab" if index == 0 else None)
         if args.ask:
             await harness.ask(args.ask)
         else:

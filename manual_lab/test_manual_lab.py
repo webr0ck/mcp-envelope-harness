@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from manual_lab.core import ManualEnvelopeLab, POISON_MARKERS
+from manual_lab.core import ManualEnvelopeLab, POISON_MARKERS, config_identity, payload_identity
 from manual_lab.outbound import _validate_public_url, append_http_log, recent_http_logs
 
 
@@ -30,6 +30,10 @@ def test_signed_low_integrity_malicious_result_is_blocked(tmp_path):
     assert consumer["verdict"] == "accepted"
     assert consumer["integrity_rank"] == 0
     assert consumer["action"] == "refuse_privileged"
+    assert consumer["reason"] == "integrity_floor_below_required"
+    assert result["decision"]["explanation"] == (
+        "The accepted integrity flag was 0; policy requires at least 1."
+    )
     assert consumer["content_withheld"] is True
     assert consumer["poison_delivered"] is False
 
@@ -50,6 +54,31 @@ def test_missing_envelope_fails_closed_when_protected(tmp_path):
     assert consumer["reason"] == "no_envelope"
     assert consumer["action"] == "refuse"
     assert consumer["poison_delivered"] is False
+    assert result["decision"]["headline"] == "BLOCKED — payload withheld from the model"
+    assert result["decision"]["explanation"] == (
+        "Protection was enabled, but the MCP result had no trust envelope."
+    )
+
+
+def test_result_is_bound_to_exact_custom_payload_not_a_preset(tmp_path):
+    lab = ManualEnvelopeLab(tmp_path)
+    custom = "<c>cmVhZC1maWxlIHByb29mLnR4dA==</c>"
+    config = {
+        "content": custom,
+        "trust_tier": 0,
+        "required_integrity": 1,
+        "envelope": "missing",
+        "protection": "off",
+        "tool_name": "manual_response",
+    }
+
+    result = lab.run(config)
+
+    assert result["producer"]["content"] == custom
+    assert result["consumer"]["delivered_text"] == custom
+    assert result["submission"]["payload"] == payload_identity(custom)
+    assert result["submission"] == config_identity(result["config"])
+    assert "UNTRUSTED TOOL INSTRUCTION" not in result["consumer"]["delivered_text"]
 
 
 def test_post_signing_tamper_is_detected(tmp_path):
@@ -122,11 +151,15 @@ def test_ui_lists_exact_connector_tools_and_harness_returns():
     assert "fetch_with_envelope_protection" not in html
     assert "Configured payload targets" in html
     assert "Publish to MCP → run evidence" in html
+    assert "Previous result hidden — editor changed" in html
+    assert "Evaluated payload" in html
+    assert "Configuration receipt" in html
+    assert "Fixture poison markers" in html
     assert "UI simulation requests" in html
     assert "MCP harness requests" in html
     assert "Annotation versus enforcement" in html
-    assert "Malicious text reaches Claude" in html
-    assert "Malicious text still reaches Claude" in html
+    assert "Malicious text reaches the model" in html
+    assert "Malicious text still reaches the model" in html
     assert "Original text is withheld" in html
     assert "Outbound request validator" in html
     assert "Base64 encode / decode" in html

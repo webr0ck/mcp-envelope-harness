@@ -11,6 +11,7 @@ from mcp.client.stdio import stdio_client
 from mcp_trust_verifier import TRUST_ENVELOPE_KEY
 
 from manual_lab.connector import SAFE_TOOL_CONTENT, TOOLS
+from manual_lab.constants import LAB_DECISION_META_KEY
 from manual_lab.core import ManualEnvelopeLab, POISON_MARKERS
 
 
@@ -54,14 +55,20 @@ def test_stdio_connector_proves_unsigned_signed_and_protected_paths(tmp_path):
     } <= names
 
     news_text = news.content[0].text
-    assert news.meta is None
+    news_decision = (news.meta or {})[LAB_DECISION_META_KEY]
+    assert news_decision["outcome"] == "bypassed"
+    assert news_decision["reason_code"] == "verification_bypassed"
     assert all(marker in news_text for marker in POISON_MARKERS)
 
     pull_requests_text = pull_requests.content[0].text
     assert (pull_requests.meta or {}).get(TRUST_ENVELOPE_KEY)
+    assert (pull_requests.meta or {})[LAB_DECISION_META_KEY]["outcome"] == "bypassed"
     assert all(marker in pull_requests_text for marker in POISON_MARKERS)
 
     jira_ticket_text = jira_ticket.content[0].text
+    jira_decision = (jira_ticket.meta or {})[LAB_DECISION_META_KEY]
+    assert jira_decision["outcome"] == "blocked"
+    assert jira_decision["reason_code"] == "integrity_floor_below_required"
     assert jira_ticket_text.startswith("[trust-gate REFUSED")
     assert not any(marker in jira_ticket_text for marker in POISON_MARKERS)
     inspected = json.loads(state.content[0].text)

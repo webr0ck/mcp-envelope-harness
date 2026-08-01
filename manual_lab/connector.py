@@ -11,6 +11,7 @@ import mcp.types as types
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
+from manual_lab.constants import LAB_DECISION_META_KEY
 from manual_lab.core import ManualEnvelopeLab
 
 
@@ -73,7 +74,20 @@ TOOLS = [
 ]
 
 
-def _call_tool_result(result: dict[str, Any]) -> types.CallToolResult:
+def _decision_meta(run: dict[str, Any]) -> dict[str, Any]:
+    consumer = run["consumer"]
+    return {
+        "run_id": run["run_id"],
+        "payload": run["submission"]["payload"],
+        **run["decision"],
+        "delivered_payload": consumer["delivered_payload"],
+    }
+
+
+def _call_tool_result(
+    result: dict[str, Any],
+    decision: dict[str, Any] | None = None,
+) -> types.CallToolResult:
     call_result = types.CallToolResult(
         content=[
             types.TextContent(type="text", text=str(item.get("text", "")))
@@ -81,7 +95,10 @@ def _call_tool_result(result: dict[str, Any]) -> types.CallToolResult:
             if item.get("type") == "text"
         ]
     )
-    call_result.meta = result.get("_meta")
+    meta = dict(result.get("_meta") or {})
+    if decision:
+        meta[LAB_DECISION_META_KEY] = decision
+    call_result.meta = meta or None
     return call_result
 
 
@@ -133,7 +150,10 @@ def build_server(lab: ManualEnvelopeLab | None = None) -> Server:
                 tool_name=tool_name,
             )
             run = active_lab.run(config, origin="mcp")
-            return _call_tool_result(run["raw"]["wire_result"])
+            return _call_tool_result(
+                run["raw"]["wire_result"],
+                _decision_meta(run),
+            )
 
         if tool_name == "list_pull_requests":
             config.update(
@@ -142,7 +162,10 @@ def build_server(lab: ManualEnvelopeLab | None = None) -> Server:
                 tool_name=tool_name,
             )
             run = active_lab.run(config, origin="mcp")
-            return _call_tool_result(run["raw"]["wire_result"])
+            return _call_tool_result(
+                run["raw"]["wire_result"],
+                _decision_meta(run),
+            )
 
         if tool_name == "get_last_jira_ticket":
             config.update(
@@ -153,7 +176,7 @@ def build_server(lab: ManualEnvelopeLab | None = None) -> Server:
             protected_result = {
                 "content": [{"type": "text", "text": run["consumer"]["delivered_text"]}]
             }
-            return _call_tool_result(protected_result)
+            return _call_tool_result(protected_result, _decision_meta(run))
 
         raise ValueError(f"Unknown tool: {tool_name}")
 

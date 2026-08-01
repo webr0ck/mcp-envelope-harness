@@ -17,7 +17,7 @@ from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from pydantic import BaseModel, Field
 
 from manual_lab.connector import build_server
-from manual_lab.core import CONNECTOR_TOOL_NAMES, ManualEnvelopeLab
+from manual_lab.core import CONNECTOR_TOOL_NAMES, ManualEnvelopeLab, config_identity
 from manual_lab.outbound import (
     ALLOWED_METHODS,
     append_http_log,
@@ -97,7 +97,9 @@ def run(request: RunRequest) -> dict[str, Any]:
     try:
         raw_config = request.model_dump()
         published_config = lab.publish_connector_config(raw_config)
-        result = lab.run(raw_config, origin="ui")
+        result = lab.run(published_config, origin="ui")
+        result["config"] = published_config
+        result["submission"] = config_identity(published_config)
         result["published_config"] = published_config
         return result
     except ValueError as exc:
