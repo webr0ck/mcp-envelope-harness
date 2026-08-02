@@ -13,6 +13,15 @@
 An **out-of-tree consumer** for the MCP trust envelope: it verifies a signed origin
 assertion on a tool result and *changes what it does* based on the verdict.
 
+**Why this repo exists at all.** No shipping MCP client verifies a trust envelope. Claude,
+Codex and the off-the-shelf clients ignore `_meta`; fast-agent 0.9.22 does something worse
+than ignore it - it *strips* `_meta` from tool results before any hook can look
+(demonstrated in [`apt/test_meta_stripping.py`](apt/test_meta_stripping.py)), so the
+assertion dies in transit no matter how well the producer signed it. Signing is the easy
+half. Until something on the consuming side is built to act on a verdict, a signed envelope
+is a control that does nothing - so this is that side, written independently of the gateway
+that produces the envelope.
+
 **What it demonstrates.** A model reads a poisoned issue and is talked into mailing its
 own session token to an attacker. It is talked into it just as successfully with the gate
 on as with the gate off - but with the gate on, the mail never sends, because reading a
