@@ -48,6 +48,12 @@ class Pki:
             .public_key(self.leaf_key.public_key()).serial_number(x509.random_serial_number())
             .not_valid_before(now).not_valid_after(now + timedelta(minutes=leaf_ttl_minutes))
             .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .add_extension(x509.KeyUsage(
+                digital_signature=True, key_cert_sign=False, crl_sign=False,
+                content_commitment=False, key_encipherment=False,
+                data_encipherment=False, key_agreement=False,
+                encipher_only=False, decipher_only=False,
+            ), critical=True)
             .add_extension(x509.ExtendedKeyUsage([MCP_LABELER_OID]), critical=False)
             .sign(self.sub_ca_key, hashes.SHA256())
         )
