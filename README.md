@@ -42,8 +42,22 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements.txt
 
 ./run_demo.sh                                  # 8 wire cases vs a real MITM proxy
 ./.venv/bin/python -m federation.run_demo      # cross-boundary: 5 cases, 3 processes
-./.venv/bin/python -m pytest -q                # 37 tests
+./.venv/bin/python -m pytest -q                # 41 tests
 ```
+
+The demo above signs its own envelopes, which only proves the consumer agrees with this
+repo's producer. To check it against the real thing, point it at a running
+[mcp-security-platform](https://github.com/webr0ck/mcp-security-platform) lab - the same
+eight cases, but the envelope is fetched from the live gateway instead of minted locally:
+
+```bash
+PYTHONPATH=.:<platform>/sdk/mcp-trust-verifier/src ./.venv/bin/python -m lab.run_lab_cases \
+  --url https://localhost:8443/mcp --token "$KC_TOKEN" --anchor /tmp/sub_ca.crt
+```
+
+`tests/test_platform_interop.py` is the cheap version of the same check - it imports the
+platform's real `TrustLabeler` and PKI script directly, needs no containers, and skips
+cleanly if the platform checkout is absent (`MCP_PLATFORM_PATH` to relocate it).
 
 The APT test needs a local OpenAI-compatible LLM endpoint and is run separately - see
 [`apt/README.md`](apt/README.md).

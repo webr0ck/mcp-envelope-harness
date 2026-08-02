@@ -8,3 +8,4 @@ _verify.out
 graphify-out/
 manual_lab/vendor/
 apt/fastagent.config.yaml
+logs/lab_verdicts.jsonl
