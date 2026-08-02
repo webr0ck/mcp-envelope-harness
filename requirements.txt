@@ -1,29 +1,13 @@
-# Python 3.12+ (the verifier requires it).
-#
-# The verifier is published from the reference implementation's repository and
-# pulls in cryptography and jcs (RFC 8785 canonicalisation) itself.
-#
-# KNOWN GAP: it FLOORS them (cryptography>=44, jcs>=0.2.1) rather than pinning. The
-# signer and the verifier must canonicalise identically, so a jcs skew between the
-# two sides is an authenticity failure that surfaces as content_hash_mismatch - it
-# looks exactly like an attack. Nothing here prevents that today.
-#
-# Pinned to a commit, not a branch: a clone today and a clone next month get the same
-# verifier, and a push to that repo cannot silently replace the security-critical
-# component here. tests/test_platform_interop.py checks the harness against the
-# producer at this same revision, so the conformance target is fixed rather than moving.
-#
-# REMAINING GAP: a commit SHA is not a signed tag. This pins *which* code you get; it
-# does not prove who wrote it. Signed tags plus a verified fingerprint would.
+# Python 3.12+.
+
+# Pinned to a commit: a branch ref would let this repo swap the verifier silently.
+# Not a signed tag, so this pins which code you get, not who wrote it.
 mcp-trust-verifier @ git+https://github.com/webr0ck/mcp-security-platform.git@583f229e4cb619bafd578de98b00e14126f4a181#subdirectory=sdk/mcp-trust-verifier
 
-# MCP client/server used by the stdio wire test and the demo servers. Upper-bounded:
-# apt/fastagent_meta_shim.py patches by method name, and 2.x is a breaking release.
+# <2: 2.x is breaking, and apt/fastagent_meta_shim.py patches by method name.
 mcp>=1.28.1,<2
 
-# The consumer under test. Pinned, not floored: 0.9.22 is the version whose
-# _meta-stripping defect apt/fastagent_meta_shim.py works around by patching a
-# specific method - a newer release may not need the shim, or may break it silently.
+# Exact: 0.9.22 is the version whose _meta stripping the shim works around.
 fast-agent-mcp==0.9.22
 
 # producer/server.py, attacks/mitm.py, federation/*, manual_lab/*
