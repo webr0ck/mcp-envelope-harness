@@ -8,11 +8,14 @@
 # two sides is an authenticity failure that surfaces as content_hash_mismatch - it
 # looks exactly like an attack. Nothing here prevents that today.
 #
-# KNOWN GAP: this tracks a branch, not a tag or commit. A clone today and a clone
-# next month are not the same verifier, and a compromise of that repo replaces the
-# security-critical component here silently. Pin it to a tag before relying on this
-# for anything real. See "Open problems" in the article.
-mcp-trust-verifier @ git+https://github.com/webr0ck/mcp-security-platform.git#subdirectory=sdk/mcp-trust-verifier
+# Pinned to a commit, not a branch: a clone today and a clone next month get the same
+# verifier, and a push to that repo cannot silently replace the security-critical
+# component here. tests/test_platform_interop.py checks the harness against the
+# producer at this same revision, so the conformance target is fixed rather than moving.
+#
+# REMAINING GAP: a commit SHA is not a signed tag. This pins *which* code you get; it
+# does not prove who wrote it. Signed tags plus a verified fingerprint would.
+mcp-trust-verifier @ git+https://github.com/webr0ck/mcp-security-platform.git@583f229e4cb619bafd578de98b00e14126f4a181#subdirectory=sdk/mcp-trust-verifier
 
 # MCP client/server used by the stdio wire test and the demo servers. Upper-bounded:
 # apt/fastagent_meta_shim.py patches by method name, and 2.x is a breaking release.
